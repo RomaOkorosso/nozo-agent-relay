@@ -1,6 +1,9 @@
 (() => {
   const STORE_BASE = "nozo_gw_base";
   const STORE_KEY = "nozo_gw_key";
+  const STORE_IMPL = "nozo_gw_impl";
+  const STORE_AUD = "nozo_gw_aud";
+  const STORE_DEL = "nozo_gw_delegation";
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const connectPanel = $("#connect-panel");
@@ -8,12 +11,18 @@
   const connLabel = $("#conn-label");
   const connectErr = $("#connect-error");
   const msgErr = $("#msg-error");
+  const taskErr = $("#task-error");
+  const taskOk = $("#task-ok");
   const projectSelect = $("#project-select");
   const taskList = $("#task-list");
   const messagesEl = $("#messages");
   const whoami = $("#whoami");
+  const taskForm = $("#task-form");
+  const btnCreate = $("#btn-create-task");
 
   let state = { base: "", key: "", projectId: null, me: null };
+  /** Reused until a create succeeds — prevents duplicate tasks on retry/network blip. */
+  let pendingTaskIdem = null;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -28,19 +37,28 @@
     return String(url || "").trim().replace(/\/+$/, "");
   }
 
-  async function api(path, { method = "GET", body = null, idempotency = false } = {}) {
+  function isUuid(v) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || "").trim());
+  }
+
+  async function api(path, { method = "GET", body = null, idempotencyKey = null } = {}) {
     const headers = {
       Authorization: `Bearer ${state.key}`,
       Accept: "application/json",
     };
     if (body != null) headers["Content-Type"] = "application/json";
-    if (idempotency) headers["Idempotency-Key"] = uuid();
-    const res = await fetch(`${state.base}${path}`, {
-      method,
-      headers,
-      body: body != null ? JSON.stringify(body) : undefined,
-      credentials: "omit",
-    });
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+    let res;
+    try {
+      res = await fetch(`${state.base}${path}`, {
+        method,
+        headers,
+        body: body != null ? JSON.stringify(body) : undefined,
+        credentials: "omit",
+      });
+    } catch (e) {
+      throw new Error(e && e.message ? e.message : "NetworkError (туннель/CORS/сеть)");
+    }
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch {
@@ -81,10 +99,23 @@
     connLabel.textContent = state.base.replace(/^https?:\/\//, "");
   }
 
+  function fillTaskDefaults() {
+    if (!taskForm) return;
+    const impl = sessionStorage.getItem(STORE_IMPL);
+    const aud = sessionStorage.getItem(STORE_AUD);
+    const del = sessionStorage.getItem(STORE_DEL);
+    if (impl) taskForm.elements.implementer_id.value = impl;
+    if (aud) taskForm.elements.auditor_id.value = aud;
+    if (del) taskForm.elements.delegation_id.value = del;
+  }
+
   async function connect(base, key) {
     state.base = normalizeBase(base);
     state.key = String(key || "").trim();
     if (!state.base || !state.key) throw new Error("Нужны URL и ключ");
+    if (/\?/.test(state.key) || state.key.includes("http")) {
+      throw new Error("В поле ключа нужен Bearer nzr_…, не URL и не пароль логина");
+    }
     const me = await api("/api/v1/me");
     state.me = me;
     sessionStorage.setItem(STORE_BASE, state.base);
@@ -101,6 +132,7 @@
     if (!memberships.length) throw new Error("Нет проектов у этого ключа");
     state.projectId = memberships[0].project_id;
     projectSelect.value = state.projectId;
+    fillTaskDefaults();
     showApp();
     await refresh();
   }
@@ -112,8 +144,8 @@
       api(`/api/v1/projects/${state.projectId}/tasks?limit=50`),
       api(`/api/v1/projects/${state.projectId}/messages?limit=50`),
     ]);
-    renderTasks(tasks.items || tasks.tasks || []);
-    renderMessages(msgs.items || msgs.messages || []);
+    renderTasks(tasks.items || []);
+    renderMessages(msgs.items || []);
   }
 
   function renderTasks(items) {
@@ -146,6 +178,67 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function parseAcceptance(raw) {
+    return String(raw || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 30);
+  }
+
+  function parsePaths(raw) {
+    return String(raw || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 100);
+  }
+
+  function validateTaskForm(fd) {
+    const title = String(fd.get("title") || "").trim();
+    const requirements = String(fd.get("requirements") || "").trim();
+    const acceptance = parseAcceptance(fd.get("acceptance"));
+    const implementer_id = String(fd.get("implementer_id") || "").trim();
+    const auditor_id = String(fd.get("auditor_id") || "").trim();
+    const delegation_id = String(fd.get("delegation_id") || "").trim();
+    const paths = parsePaths(fd.get("paths"));
+    const mode = String(fd.get("mode") || "surgical");
+    const autonomous = !!taskForm.elements.autonomous.checked;
+
+    if (!title) throw new Error("Укажите заголовок");
+    if (!requirements) throw new Error("Укажите требования");
+    if (!acceptance.length) throw new Error("Нужен хотя бы один acceptance-критерий");
+    if (!isUuid(implementer_id)) throw new Error("implementer_id должен быть UUID");
+    if (!isUuid(auditor_id)) throw new Error("auditor_id должен быть UUID");
+    if (!isUuid(delegation_id)) throw new Error("delegation_id должен быть UUID");
+    if (implementer_id === auditor_id) throw new Error("Implementer и auditor должны отличаться");
+    if (!paths.length) throw new Error("Нужен хотя бы один allowed path");
+    for (const p of paths) {
+      if (p.startsWith("/") || p.includes("..")) throw new Error(`Некорректный path: ${p}`);
+    }
+    if (mode !== "surgical" && mode !== "creative") throw new Error("mode: surgical|creative");
+
+    return {
+      title,
+      requirements,
+      acceptance,
+      implementer_id,
+      auditor_id,
+      delegation_id,
+      mode,
+      autonomous,
+      urgency: "normal",
+      max_failed_reviews: 3,
+      scope: {
+        allowed_paths: paths,
+        denied_paths: [],
+        max_changed_files: 50,
+        max_diff_lines: 2000,
+        allow_new_dependencies: false,
+      },
+    };
+  }
+
   $("#connect-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     connectErr.hidden = true;
@@ -161,6 +254,7 @@
     sessionStorage.removeItem(STORE_BASE);
     sessionStorage.removeItem(STORE_KEY);
     state = { base: "", key: "", projectId: null, me: null };
+    pendingTaskIdem = null;
     showConnect();
   });
 
@@ -185,7 +279,7 @@
     try {
       await api(`/api/v1/projects/${state.projectId}/messages`, {
         method: "POST",
-        idempotency: true,
+        idempotencyKey: uuid(),
         body: {
           client_message_id: uuid(),
           kind: "note",
@@ -197,6 +291,47 @@
     } catch (e) {
       msgErr.hidden = false;
       msgErr.textContent = e.message || String(e);
+    }
+  });
+
+  taskForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    taskErr.hidden = true;
+    taskOk.hidden = true;
+    let payload;
+    try {
+      payload = validateTaskForm(new FormData(taskForm));
+    } catch (e) {
+      taskErr.hidden = false;
+      taskErr.textContent = e.message || String(e);
+      return;
+    }
+
+    sessionStorage.setItem(STORE_IMPL, payload.implementer_id);
+    sessionStorage.setItem(STORE_AUD, payload.auditor_id);
+    sessionStorage.setItem(STORE_DEL, payload.delegation_id);
+
+    if (!pendingTaskIdem) pendingTaskIdem = uuid();
+    btnCreate.disabled = true;
+    try {
+      const created = await api(`/api/v1/projects/${state.projectId}/tasks`, {
+        method: "POST",
+        idempotencyKey: pendingTaskIdem,
+        body: payload,
+      });
+      pendingTaskIdem = null;
+      taskForm.elements.title.value = "";
+      taskForm.elements.requirements.value = "";
+      taskForm.elements.acceptance.value = "";
+      taskOk.hidden = false;
+      taskOk.textContent = `Создано: ${created.id || created.title || "ok"} (${created.status || "draft"})`;
+      await refresh();
+    } catch (e) {
+      taskErr.hidden = false;
+      taskErr.textContent = e.message || String(e);
+      // keep pendingTaskIdem so retry does not duplicate
+    } finally {
+      btnCreate.disabled = false;
     }
   });
 

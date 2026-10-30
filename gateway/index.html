@@ -38,6 +38,45 @@
         <h2>Задачи</h2>
         <ul id="task-list" class="list"></ul>
         <button type="button" id="btn-refresh" class="btn">Обновить</button>
+
+        <h2>Новая задача</h2>
+        <form id="task-form" class="task-form">
+          <label class="field">Заголовок
+            <input name="title" type="text" required maxlength="200" autocomplete="off">
+          </label>
+          <label class="field">Требования
+            <textarea name="requirements" rows="3" required maxlength="32000"></textarea>
+          </label>
+          <label class="field">Acceptance (по одной строке)
+            <textarea name="acceptance" rows="3" required placeholder="критерий 1&#10;критерий 2"></textarea>
+          </label>
+          <label class="field">Implementer UUID
+            <input name="implementer_id" type="text" required pattern="[0-9a-fA-F-]{36}" spellcheck="false" autocomplete="off">
+          </label>
+          <label class="field">Auditor UUID
+            <input name="auditor_id" type="text" required pattern="[0-9a-fA-F-]{36}" spellcheck="false" autocomplete="off">
+          </label>
+          <label class="field">Delegation UUID (координатор)
+            <input name="delegation_id" type="text" required pattern="[0-9a-fA-F-]{36}" spellcheck="false" autocomplete="off">
+          </label>
+          <label class="field">Allowed paths (по строке)
+            <textarea name="paths" rows="2" required>web/**
+docs/**
+tests/**</textarea>
+          </label>
+          <div class="row-inline">
+            <label class="field">Mode
+              <select name="mode">
+                <option value="surgical" selected>surgical</option>
+                <option value="creative">creative</option>
+              </select>
+            </label>
+            <label class="check"><input name="autonomous" type="checkbox" checked> autonomous</label>
+          </div>
+          <button class="btn primary" type="submit" id="btn-create-task">Создать задачу</button>
+          <p id="task-error" class="err" role="alert" hidden></p>
+          <p id="task-ok" class="ok" hidden></p>
+        </form>
       </aside>
       <main class="card chat">
         <h2>Чат</h2>
