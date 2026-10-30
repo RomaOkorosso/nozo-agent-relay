@@ -7,6 +7,9 @@
   const STORE_PENDING_TASK = "nozo_gw_pending_task";
   const MAX_ACCEPTANCE = 30;
   const MAX_PATHS = 100;
+  const LIST_PAGE_LIMIT = 50;
+  /** Cap pages so a huge project cannot hang the SPA (50×40 = 2000 items). */
+  const MAX_LIST_PAGES = 40;
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const connectPanel = $("#connect-panel");
@@ -221,15 +224,31 @@
     await refresh();
   }
 
+  async function fetchAllPages(pathBase) {
+    const items = [];
+    let cursor = null;
+    for (let page = 0; page < MAX_LIST_PAGES; page++) {
+      const qs = new URLSearchParams({ limit: String(LIST_PAGE_LIMIT) });
+      if (cursor) qs.set("cursor", cursor);
+      const data = await api(`${pathBase}?${qs}`);
+      const batch = data.items || [];
+      items.push(...batch);
+      cursor = data.next_cursor || null;
+      if (!cursor || !batch.length) break;
+    }
+    return items;
+  }
+
   async function refresh() {
     if (!state.projectId) return;
     msgErr.hidden = true;
+    const base = `/api/v1/projects/${state.projectId}`;
     const [tasks, msgs] = await Promise.all([
-      api(`/api/v1/projects/${state.projectId}/tasks?limit=50`),
-      api(`/api/v1/projects/${state.projectId}/messages?limit=50`),
+      fetchAllPages(`${base}/tasks`),
+      fetchAllPages(`${base}/messages`),
     ]);
-    renderTasks(tasks.items || []);
-    renderMessages(msgs.items || []);
+    renderTasks(tasks);
+    renderMessages(msgs);
   }
 
   function renderTasks(items) {
