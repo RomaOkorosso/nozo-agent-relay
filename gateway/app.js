@@ -43,7 +43,14 @@
     });
     const text = await res.text();
     let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+    try { data = text ? JSON.parse(text) : null; } catch {
+      const looksHtml = /^\s*</.test(text || "");
+      throw new Error(
+        looksHtml
+          ? "Туннель вернул HTML вместо API (часто free Pinggy/заглушка). Нужен другой публичный URL Relay."
+          : `Не JSON от Relay (HTTP ${res.status}).`
+      );
+    }
     if (!res.ok) {
       const msg = (data && data.error && data.error.message) || `HTTP ${res.status}`;
       const err = new Error(msg);
