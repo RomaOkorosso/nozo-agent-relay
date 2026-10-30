@@ -247,7 +247,8 @@
       fetchAllPages(`${base}/tasks`),
       fetchAllPages(`${base}/messages`),
     ]);
-    renderTasks(tasks);
+    // API returns ASC; show newest tasks first so creates past page 1 stay obvious.
+    renderTasks([...tasks].reverse());
     renderMessages(msgs);
   }
 
