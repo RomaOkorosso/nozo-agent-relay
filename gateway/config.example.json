@@ -1,0 +1,4 @@
+{
+  "relay_base_url": "https://YOUR-TUNNEL.example",
+  "note": "Do not put the coordinator Bearer key in this file or in git. Paste URL+key in the gateway UI (sessionStorage only). Optional query: ?relay=https://…"
+}

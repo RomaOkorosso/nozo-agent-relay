@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Nozo Gateway</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <strong>Nozo Gateway</strong>
+    <span class="muted" id="conn-label">не подключено</span>
+    <button type="button" id="btn-disconnect" class="btn ghost" hidden>Сменить</button>
+  </header>
+
+  <section id="connect-panel" class="card">
+    <h1>Подключение к Relay</h1>
+    <p class="muted">Статический шлюз на GitHub Pages. Ключ и URL туннеля хранятся только в sessionStorage этого браузера — в репозиторий не попадают.</p>
+    <form id="connect-form">
+      <label class="field">Relay base URL
+        <input name="base" type="url" required placeholder="https://….run.pinggy-free.link" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field">Coordinator Bearer key
+        <input name="key" type="password" required placeholder="nzr_…" autocomplete="off" spellcheck="false">
+      </label>
+      <button class="btn primary" type="submit">Подключить</button>
+      <p id="connect-error" class="err" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="app-panel" hidden>
+    <div class="row">
+      <aside class="card side">
+        <h2>Проект</h2>
+        <p id="whoami" class="muted"></p>
+        <select id="project-select"></select>
+        <h2>Задачи</h2>
+        <ul id="task-list" class="list"></ul>
+        <button type="button" id="btn-refresh" class="btn">Обновить</button>
+      </aside>
+      <main class="card chat">
+        <h2>Чат</h2>
+        <div id="messages" class="messages" aria-live="polite"></div>
+        <form id="msg-form" class="composer">
+          <textarea name="body" rows="3" required maxlength="16000" placeholder="Сообщение в Relay…"></textarea>
+          <button class="btn primary" type="submit">Отправить</button>
+        </form>
+        <p id="msg-error" class="err" role="alert" hidden></p>
+      </main>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
