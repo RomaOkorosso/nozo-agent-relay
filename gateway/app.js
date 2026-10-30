@@ -4,6 +4,9 @@
   const STORE_IMPL = "nozo_gw_impl";
   const STORE_AUD = "nozo_gw_aud";
   const STORE_DEL = "nozo_gw_delegation";
+  const STORE_PENDING_TASK = "nozo_gw_pending_task";
+  const MAX_ACCEPTANCE = 30;
+  const MAX_PATHS = 100;
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const connectPanel = $("#connect-panel");
@@ -21,8 +24,8 @@
   const btnCreate = $("#btn-create-task");
 
   let state = { base: "", key: "", projectId: null, me: null };
-  /** Reused until a create succeeds — prevents duplicate tasks on retry/network blip. */
-  let pendingTaskIdem = null;
+  /** @type {{ idempotencyKey: string, projectId: string, payload: object } | null} */
+  let pendingTask = null;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -39,6 +42,72 @@
 
   function isUuid(v) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || "").trim());
+  }
+
+  function stableJson(obj) {
+    return JSON.stringify(obj);
+  }
+
+  function loadPending() {
+    try {
+      const raw = sessionStorage.getItem(STORE_PENDING_TASK);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.idempotencyKey || !parsed.payload || !parsed.projectId) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function savePending(p) {
+    pendingTask = p;
+    if (p) sessionStorage.setItem(STORE_PENDING_TASK, JSON.stringify(p));
+    else sessionStorage.removeItem(STORE_PENDING_TASK);
+    updatePendingUi();
+  }
+
+  function clearPending() {
+    savePending(null);
+  }
+
+  function updatePendingUi() {
+    if (!btnCreate || !taskForm) return;
+    let discard = $("#btn-discard-pending");
+    if (pendingTask) {
+      if (!discard) {
+        discard = document.createElement("button");
+        discard.type = "button";
+        discard.id = "btn-discard-pending";
+        discard.className = "btn";
+        discard.textContent = "Сбросить незавершённую отправку";
+        discard.addEventListener("click", () => {
+          clearPending();
+          taskErr.hidden = true;
+          taskOk.hidden = false;
+          taskOk.textContent = "Незавершённая отправка сброшена. Можно создать новую задачу.";
+        });
+        btnCreate.insertAdjacentElement("afterend", discard);
+      }
+      discard.hidden = false;
+      btnCreate.textContent = "Повторить создание (тот же запрос)";
+    } else {
+      if (discard) discard.hidden = true;
+      btnCreate.textContent = "Создать задачу";
+    }
+  }
+
+  function applyPayloadToForm(payload) {
+    if (!taskForm || !payload) return;
+    taskForm.elements.title.value = payload.title || "";
+    taskForm.elements.requirements.value = payload.requirements || "";
+    taskForm.elements.acceptance.value = (payload.acceptance || []).join("\n");
+    taskForm.elements.implementer_id.value = payload.implementer_id || "";
+    taskForm.elements.auditor_id.value = payload.auditor_id || "";
+    taskForm.elements.delegation_id.value = payload.delegation_id || "";
+    taskForm.elements.paths.value = ((payload.scope && payload.scope.allowed_paths) || []).join("\n");
+    taskForm.elements.mode.value = payload.mode || "surgical";
+    taskForm.elements.autonomous.checked = !!payload.autonomous;
   }
 
   async function api(path, { method = "GET", body = null, idempotencyKey = null } = {}) {
@@ -104,9 +173,23 @@
     const impl = sessionStorage.getItem(STORE_IMPL);
     const aud = sessionStorage.getItem(STORE_AUD);
     const del = sessionStorage.getItem(STORE_DEL);
-    if (impl) taskForm.elements.implementer_id.value = impl;
-    if (aud) taskForm.elements.auditor_id.value = aud;
-    if (del) taskForm.elements.delegation_id.value = del;
+    if (impl && !taskForm.elements.implementer_id.value) taskForm.elements.implementer_id.value = impl;
+    if (aud && !taskForm.elements.auditor_id.value) taskForm.elements.auditor_id.value = aud;
+    if (del && !taskForm.elements.delegation_id.value) taskForm.elements.delegation_id.value = del;
+  }
+
+  function restorePendingAfterConnect() {
+    pendingTask = loadPending();
+    updatePendingUi();
+    if (!pendingTask) return;
+    if (pendingTask.projectId && state.projectId && pendingTask.projectId !== state.projectId) {
+      taskErr.hidden = false;
+      taskErr.textContent = "Есть незавершённая отправка для другого проекта. Сбросьте её или переключите проект.";
+      return;
+    }
+    applyPayloadToForm(pendingTask.payload);
+    taskOk.hidden = false;
+    taskOk.textContent = "Найдена незавершённая отправка (ответ мог потеряться). Нажмите «Повторить» с тем же телом — дубль не создастся. Или сбросьте.";
   }
 
   async function connect(base, key) {
@@ -134,6 +217,7 @@
     projectSelect.value = state.projectId;
     fillTaskDefaults();
     showApp();
+    restorePendingAfterConnect();
     await refresh();
   }
 
@@ -178,41 +262,38 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function parseAcceptance(raw) {
+  function parseLines(raw) {
     return String(raw || "")
       .split(/\r?\n/)
       .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 30);
-  }
-
-  function parsePaths(raw) {
-    return String(raw || "")
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 100);
+      .filter(Boolean);
   }
 
   function validateTaskForm(fd) {
     const title = String(fd.get("title") || "").trim();
     const requirements = String(fd.get("requirements") || "").trim();
-    const acceptance = parseAcceptance(fd.get("acceptance"));
+    const acceptance = parseLines(fd.get("acceptance"));
     const implementer_id = String(fd.get("implementer_id") || "").trim();
     const auditor_id = String(fd.get("auditor_id") || "").trim();
     const delegation_id = String(fd.get("delegation_id") || "").trim();
-    const paths = parsePaths(fd.get("paths"));
+    const paths = parseLines(fd.get("paths"));
     const mode = String(fd.get("mode") || "surgical");
     const autonomous = !!taskForm.elements.autonomous.checked;
 
     if (!title) throw new Error("Укажите заголовок");
     if (!requirements) throw new Error("Укажите требования");
     if (!acceptance.length) throw new Error("Нужен хотя бы один acceptance-критерий");
+    if (acceptance.length > MAX_ACCEPTANCE) {
+      throw new Error(`Слишком много acceptance-строк: ${acceptance.length} (макс. ${MAX_ACCEPTANCE}). Уберите лишние — критерии не обрезаются молча.`);
+    }
     if (!isUuid(implementer_id)) throw new Error("implementer_id должен быть UUID");
     if (!isUuid(auditor_id)) throw new Error("auditor_id должен быть UUID");
     if (!isUuid(delegation_id)) throw new Error("delegation_id должен быть UUID");
     if (implementer_id === auditor_id) throw new Error("Implementer и auditor должны отличаться");
     if (!paths.length) throw new Error("Нужен хотя бы один allowed path");
+    if (paths.length > MAX_PATHS) {
+      throw new Error(`Слишком много paths: ${paths.length} (макс. ${MAX_PATHS}). Лишние не обрезаются молча.`);
+    }
     for (const p of paths) {
       if (p.startsWith("/") || p.includes("..")) throw new Error(`Некорректный path: ${p}`);
     }
@@ -254,7 +335,8 @@
     sessionStorage.removeItem(STORE_BASE);
     sessionStorage.removeItem(STORE_KEY);
     state = { base: "", key: "", projectId: null, me: null };
-    pendingTaskIdem = null;
+    // Keep pendingTask in sessionStorage so reload/reconnect can resume safely.
+    pendingTask = loadPending();
     showConnect();
   });
 
@@ -311,15 +393,38 @@
     sessionStorage.setItem(STORE_AUD, payload.auditor_id);
     sessionStorage.setItem(STORE_DEL, payload.delegation_id);
 
-    if (!pendingTaskIdem) pendingTaskIdem = uuid();
+    pendingTask = loadPending();
+    if (pendingTask) {
+      if (pendingTask.projectId !== state.projectId) {
+        taskErr.hidden = false;
+        taskErr.textContent = "Незавершённая отправка относится к другому проекту. Сбросьте её или переключите проект.";
+        updatePendingUi();
+        return;
+      }
+      if (stableJson(pendingTask.payload) !== stableJson(payload)) {
+        taskErr.hidden = false;
+        taskErr.textContent =
+          "Форма изменена, а Idempotency-Key уже занят прежним телом (иначе 409). Сбросьте незавершённую отправку или верните прежние поля и повторите.";
+        applyPayloadToForm(pendingTask.payload);
+        updatePendingUi();
+        return;
+      }
+    } else {
+      savePending({
+        idempotencyKey: uuid(),
+        projectId: state.projectId,
+        payload,
+      });
+    }
+
     btnCreate.disabled = true;
     try {
       const created = await api(`/api/v1/projects/${state.projectId}/tasks`, {
         method: "POST",
-        idempotencyKey: pendingTaskIdem,
-        body: payload,
+        idempotencyKey: pendingTask.idempotencyKey,
+        body: pendingTask.payload,
       });
-      pendingTaskIdem = null;
+      clearPending();
       taskForm.elements.title.value = "";
       taskForm.elements.requirements.value = "";
       taskForm.elements.acceptance.value = "";
@@ -327,13 +432,24 @@
       taskOk.textContent = `Создано: ${created.id || created.title || "ok"} (${created.status || "draft"})`;
       await refresh();
     } catch (e) {
+      // Keep immutable pending in sessionStorage for reload/retry.
+      savePending(pendingTask);
       taskErr.hidden = false;
-      taskErr.textContent = e.message || String(e);
-      // keep pendingTaskIdem so retry does not duplicate
+      const code = e.data && e.data.error && e.data.error.code;
+      if (e.status === 409 && code === "idempotency_conflict") {
+        taskErr.textContent =
+          "idempotency_conflict: этот ключ уже использован с другим телом. Сбросьте незавершённую отправку и создайте заново.";
+      } else {
+        taskErr.textContent = (e.message || String(e)) + " — можно безопасно повторить тот же запрос.";
+      }
     } finally {
       btnCreate.disabled = false;
+      updatePendingUi();
     }
   });
+
+  pendingTask = loadPending();
+  updatePendingUi();
 
   const savedBase = sessionStorage.getItem(STORE_BASE);
   const savedKey = sessionStorage.getItem(STORE_KEY);
