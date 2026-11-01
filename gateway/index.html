@@ -2,24 +2,25 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light">
   <title>Nozo Gateway</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header class="top">
     <strong>Nozo Gateway</strong>
-    <span class="muted" id="conn-label">не подключено</span>
+    <span class="status-chip" id="conn-chip" data-state="idle">не подключено</span>
     <button type="button" id="btn-disconnect" class="btn ghost" hidden>Сменить</button>
   </header>
 
   <section id="connect-panel" class="card">
     <h1>Подключение к Relay</h1>
-    <p class="muted">Статический шлюз на GitHub Pages. Ключ и URL туннеля хранятся только в sessionStorage этого браузера — в репозиторий не попадают.</p>
+    <p class="muted">Статический шлюз на GitHub Pages. Bearer-ключ хранится только в <code>sessionStorage</code> этого браузера — не в URL и не в репозитории. Публичный адрес Relay подставляется из <code>pointer.json</code> (Tailscale Funnel), при необходимости его можно заменить вручную.</p>
     <form id="connect-form">
       <label class="field">Relay base URL
-        <input name="base" type="url" required placeholder="https://….run.pinggy-free.link" autocomplete="off" spellcheck="false">
+        <input name="base" type="url" required placeholder="https://….ts.net" autocomplete="off" spellcheck="false" inputmode="url">
       </label>
       <label class="field">Coordinator Bearer key
         <input name="key" type="password" required placeholder="nzr_…" autocomplete="off" spellcheck="false">
@@ -83,9 +84,10 @@ tests/**</textarea>
         <div id="messages" class="messages" aria-live="polite"></div>
         <form id="msg-form" class="composer">
           <textarea name="body" rows="3" required maxlength="16000" placeholder="Сообщение в Relay…"></textarea>
-          <button class="btn primary" type="submit">Отправить</button>
+          <button class="btn primary" type="submit" id="btn-send-msg">Отправить</button>
         </form>
         <p id="msg-error" class="err" role="alert" hidden></p>
+        <p id="msg-ok" class="ok" hidden></p>
       </main>
     </div>
   </section>

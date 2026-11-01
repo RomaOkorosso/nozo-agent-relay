@@ -1,0 +1,13 @@
+{"case": "local_owner_login", "http": 303, "session_cookie": true, "origin_err": false}
+{"case": "local_owner_projects", "http": 200}
+{"case": "funnel_coord_me", "http": 200, "kind": "coordinator", "acao": "https://romaokorosso.github.io"}
+{"case": "idempotent_message", "http1": 201, "http2": 201, "same_id": true}
+{"case": "funnel_owner_login", "http": 303, "forbidden": false}
+{"case": "cors_evil", "http": 405, "acao": null}
+{"case": "bad_token", "http": 401}
+{"case": "coord_list_tasks", "http": 200}
+{"case": "coord_list_messages", "http": 200}
+{"case": "public_json_not_html", "http": 200, "json": true, "content_type": "application/json"}
+{"case": "relay_restart", "local_ready": true, "public_live": true}
+{"case": "data_survived_restart", "http": 200, "found_message": true}
+{"case": "coord_denied_agents", "http": 403}

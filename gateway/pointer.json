@@ -1,0 +1,6 @@
+{
+  "relay_base": "https://roma-gv628rc.tailbfec94.ts.net",
+  "updated_at": "2026-11-01T10:13:56Z",
+  "transport": "tailscale_funnel",
+  "note": "Public coordinator HTTPS via Tailscale Funnel. No keys. Gateway may auto-fill this URL."
+}

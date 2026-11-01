@@ -5,18 +5,23 @@
   const STORE_AUD = "nozo_gw_aud";
   const STORE_DEL = "nozo_gw_delegation";
   const STORE_PENDING_TASK = "nozo_gw_pending_task";
+  const STORE_PENDING_MSG = "nozo_gw_pending_msg";
+  const STORE_DRAFT_MSG = "nozo_gw_draft_msg";
+  const STORE_DRAFT_TASK = "nozo_gw_draft_task";
   const MAX_ACCEPTANCE = 30;
   const MAX_PATHS = 100;
   const LIST_PAGE_LIMIT = 50;
-  /** Cap pages so a huge project cannot hang the SPA (50×40 = 2000 items). */
   const MAX_LIST_PAGES = 40;
+  const POINTER_URL = new URL("pointer.json", location.href).href;
+  const POLL_MS = 15000;
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const connectPanel = $("#connect-panel");
   const appPanel = $("#app-panel");
-  const connLabel = $("#conn-label");
+  const connChip = $("#conn-chip");
   const connectErr = $("#connect-error");
   const msgErr = $("#msg-error");
+  const msgOk = $("#msg-ok");
   const taskErr = $("#task-error");
   const taskOk = $("#task-ok");
   const projectSelect = $("#project-select");
@@ -24,11 +29,31 @@
   const messagesEl = $("#messages");
   const whoami = $("#whoami");
   const taskForm = $("#task-form");
+  const msgForm = $("#msg-form");
   const btnCreate = $("#btn-create-task");
+  const btnSend = $("#btn-send-msg");
 
   let state = { base: "", key: "", projectId: null, me: null };
   /** @type {{ idempotencyKey: string, projectId: string, payload: object } | null} */
   let pendingTask = null;
+  /** @type {{ idempotencyKey: string, clientMessageId: string, projectId: string, body: string } | null} */
+  let pendingMsg = null;
+  let pollTimer = null;
+  let recovering = false;
+
+  const STATE_LABEL = {
+    idle: "не подключено",
+    connecting: "подключение…",
+    connected: "подключено",
+    lost: "связь потеряна",
+    recovering: "восстановление…",
+    auth: "требуется вход",
+  };
+
+  function setConnState(s, detail) {
+    connChip.dataset.state = s;
+    connChip.textContent = detail || STATE_LABEL[s] || s;
+  }
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -51,27 +76,80 @@
     return JSON.stringify(obj);
   }
 
-  function loadPending() {
+  function classifyFetchFailure(err, res, text) {
+    if (res && (res.status === 401 || res.status === 403)) {
+      const code = (() => {
+        try { return JSON.parse(text || "{}").error?.code; } catch { return null; }
+      })();
+      if (res.status === 401 || code === "unauthenticated" || code === "credential_revoked") {
+        return { kind: "auth", message: "Ключ отклонён или истёк. Введите coordinator Bearer заново." };
+      }
+      return { kind: "http", message: (JSON.parse(text || "{}").error?.message) || `HTTP ${res.status}` };
+    }
+    if (!res) {
+      const msg = err && err.message ? err.message : String(err || "NetworkError");
+      if (/Failed to fetch|NetworkError|network/i.test(msg)) {
+        return { kind: "network", message: "Сеть/туннель недоступны (Failed to fetch). Проверьте, что ноутбук онлайн и Funnel жив." };
+      }
+      return { kind: "network", message: msg };
+    }
+    const looksHtml = /^\s*</.test(text || "");
+    if (looksHtml) {
+      return { kind: "html", message: "Вместо JSON пришёл HTML (заглушка провайдера/прокси). Relay URL неверный или туннель не тот." };
+    }
     try {
-      const raw = sessionStorage.getItem(STORE_PENDING_TASK);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.idempotencyKey || !parsed.payload || !parsed.projectId) return null;
-      return parsed;
+      const data = text ? JSON.parse(text) : null;
+      const msg = (data && data.error && data.error.message) || `HTTP ${res.status}`;
+      return { kind: "http", message: msg, status: res.status, data };
+    } catch {
+      return { kind: "http", message: `Не JSON от Relay (HTTP ${res.status}).` };
+    }
+  }
+
+  function loadJson(key) {
+    try {
+      const raw = sessionStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   }
 
+  function saveJson(key, val) {
+    if (val == null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(val));
+  }
+
+  function loadPending() {
+    const parsed = loadJson(STORE_PENDING_TASK);
+    if (!parsed || !parsed.idempotencyKey || !parsed.payload || !parsed.projectId) return null;
+    return parsed;
+  }
+
   function savePending(p) {
     pendingTask = p;
-    if (p) sessionStorage.setItem(STORE_PENDING_TASK, JSON.stringify(p));
-    else sessionStorage.removeItem(STORE_PENDING_TASK);
+    saveJson(STORE_PENDING_TASK, p);
     updatePendingUi();
   }
 
   function clearPending() {
     savePending(null);
+  }
+
+  function loadPendingMsg() {
+    const p = loadJson(STORE_PENDING_MSG);
+    if (!p || !p.idempotencyKey || !p.clientMessageId || !p.projectId || !p.body) return null;
+    return p;
+  }
+
+  function savePendingMsg(p) {
+    pendingMsg = p;
+    saveJson(STORE_PENDING_MSG, p);
+    updatePendingMsgUi();
+  }
+
+  function clearPendingMsg() {
+    savePendingMsg(null);
   }
 
   function updatePendingUi() {
@@ -100,6 +178,11 @@
     }
   }
 
+  function updatePendingMsgUi() {
+    if (!btnSend) return;
+    btnSend.textContent = pendingMsg ? "Повторить отправку" : "Отправить";
+  }
+
   function applyPayloadToForm(payload) {
     if (!taskForm || !payload) return;
     taskForm.elements.title.value = payload.title || "";
@@ -111,6 +194,40 @@
     taskForm.elements.paths.value = ((payload.scope && payload.scope.allowed_paths) || []).join("\n");
     taskForm.elements.mode.value = payload.mode || "surgical";
     taskForm.elements.autonomous.checked = !!payload.autonomous;
+  }
+
+  function persistDrafts() {
+    if (msgForm) saveJson(STORE_DRAFT_MSG, { body: msgForm.elements.body.value || "" });
+    if (taskForm) {
+      saveJson(STORE_DRAFT_TASK, {
+        title: taskForm.elements.title.value,
+        requirements: taskForm.elements.requirements.value,
+        acceptance: taskForm.elements.acceptance.value,
+        implementer_id: taskForm.elements.implementer_id.value,
+        auditor_id: taskForm.elements.auditor_id.value,
+        delegation_id: taskForm.elements.delegation_id.value,
+        paths: taskForm.elements.paths.value,
+        mode: taskForm.elements.mode.value,
+        autonomous: !!taskForm.elements.autonomous.checked,
+      });
+    }
+  }
+
+  function restoreDrafts() {
+    const md = loadJson(STORE_DRAFT_MSG);
+    if (md && msgForm && !msgForm.elements.body.value) msgForm.elements.body.value = md.body || "";
+    const td = loadJson(STORE_DRAFT_TASK);
+    if (td && taskForm && !taskForm.elements.title.value) {
+      taskForm.elements.title.value = td.title || "";
+      taskForm.elements.requirements.value = td.requirements || "";
+      taskForm.elements.acceptance.value = td.acceptance || "";
+      if (td.implementer_id) taskForm.elements.implementer_id.value = td.implementer_id;
+      if (td.auditor_id) taskForm.elements.auditor_id.value = td.auditor_id;
+      if (td.delegation_id) taskForm.elements.delegation_id.value = td.delegation_id;
+      if (td.paths) taskForm.elements.paths.value = td.paths;
+      if (td.mode) taskForm.elements.mode.value = td.mode;
+      taskForm.elements.autonomous.checked = !!td.autonomous;
+    }
   }
 
   async function api(path, { method = "GET", body = null, idempotencyKey = null } = {}) {
@@ -129,33 +246,41 @@
         credentials: "omit",
       });
     } catch (e) {
-      throw new Error(e && e.message ? e.message : "NetworkError (туннель/CORS/сеть)");
-    }
-    const text = await res.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch {
-      const looksHtml = /^\s*</.test(text || "");
-      throw new Error(
-        looksHtml
-          ? "Туннель вернул HTML вместо API (часто free Pinggy/заглушка). Нужен другой публичный URL Relay."
-          : `Не JSON от Relay (HTTP ${res.status}).`
-      );
-    }
-    if (!res.ok) {
-      const msg = (data && data.error && data.error.message) || `HTTP ${res.status}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      err.data = data;
+      const c = classifyFetchFailure(e, null, null);
+      const err = new Error(c.message);
+      err.kind = c.kind;
       throw err;
     }
-    return data;
+    const text = await res.text();
+    if (!res.ok) {
+      const c = classifyFetchFailure(null, res, text);
+      const err = new Error(c.message);
+      err.kind = c.kind;
+      err.status = res.status;
+      err.data = c.data;
+      if (c.kind === "auth") {
+        setConnState("auth");
+        sessionStorage.removeItem(STORE_KEY);
+        showConnect(c.message);
+      }
+      throw err;
+    }
+    try {
+      return text ? JSON.parse(text) : null;
+    } catch {
+      const c = classifyFetchFailure(null, res, text);
+      const err = new Error(c.message);
+      err.kind = c.kind;
+      throw err;
+    }
   }
 
   function showConnect(errText) {
+    stopPoll();
     connectPanel.hidden = false;
     appPanel.hidden = true;
     $("#btn-disconnect").hidden = true;
-    connLabel.textContent = "не подключено";
+    if (!errText || connChip.dataset.state !== "auth") setConnState("idle");
     if (errText) {
       connectErr.hidden = false;
       connectErr.textContent = errText;
@@ -168,7 +293,7 @@
     connectPanel.hidden = true;
     appPanel.hidden = false;
     $("#btn-disconnect").hidden = false;
-    connLabel.textContent = state.base.replace(/^https?:\/\//, "");
+    setConnState("connected", state.base.replace(/^https?:\/\//, ""));
   }
 
   function fillTaskDefaults() {
@@ -184,6 +309,9 @@
   function restorePendingAfterConnect() {
     pendingTask = loadPending();
     updatePendingUi();
+    pendingMsg = loadPendingMsg();
+    updatePendingMsgUi();
+    if (pendingMsg && msgForm) msgForm.elements.body.value = pendingMsg.body;
     if (!pendingTask) return;
     if (pendingTask.projectId && state.projectId && pendingTask.projectId !== state.projectId) {
       taskErr.hidden = false;
@@ -195,7 +323,20 @@
     taskOk.textContent = "Найдена незавершённая отправка (ответ мог потеряться). Нажмите «Повторить» с тем же телом — дубль не создастся. Или сбросьте.";
   }
 
+  async function fetchPointerBase() {
+    try {
+      const res = await fetch(POINTER_URL, { cache: "no-store", credentials: "omit" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const base = normalizeBase(data && data.relay_base);
+      return base || null;
+    } catch {
+      return null;
+    }
+  }
+
   async function connect(base, key) {
+    setConnState("connecting");
     state.base = normalizeBase(base);
     state.key = String(key || "").trim();
     if (!state.base || !state.key) throw new Error("Нужны URL и ключ");
@@ -219,9 +360,11 @@
     state.projectId = memberships[0].project_id;
     projectSelect.value = state.projectId;
     fillTaskDefaults();
+    restoreDrafts();
     showApp();
     restorePendingAfterConnect();
     await refresh();
+    startPoll();
   }
 
   async function fetchAllPages(pathBase) {
@@ -247,9 +390,11 @@
       fetchAllPages(`${base}/tasks`),
       fetchAllPages(`${base}/messages`),
     ]);
-    // API returns ASC; show newest tasks first so creates past page 1 stay obvious.
     renderTasks([...tasks].reverse());
     renderMessages(msgs);
+    if (connChip.dataset.state === "lost" || connChip.dataset.state === "recovering") {
+      setConnState("connected", state.base.replace(/^https?:\/\//, ""));
+    }
   }
 
   function renderTasks(items) {
@@ -340,6 +485,56 @@
     };
   }
 
+  function startPoll() {
+    stopPoll();
+    pollTimer = setInterval(() => {
+      if (!state.projectId || document.hidden) return;
+      softRefresh();
+    }, POLL_MS);
+  }
+
+  function stopPoll() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  async function softRefresh() {
+    if (recovering) return;
+    try {
+      await refresh();
+    } catch (e) {
+      if (e.kind === "auth") return;
+      setConnState("lost");
+      recovering = true;
+      setConnState("recovering");
+      try {
+        // Re-read pointer in case transport URL changed (rare for Funnel; useful for fallback tunnels).
+        const pointed = await fetchPointerBase();
+        if (pointed && pointed !== state.base) {
+          state.base = pointed;
+          sessionStorage.setItem(STORE_BASE, state.base);
+        }
+        await refresh();
+        setConnState("connected", state.base.replace(/^https?:\/\//, ""));
+      } catch (e2) {
+        if (e2.kind !== "auth") setConnState("lost");
+      } finally {
+        recovering = false;
+      }
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.projectId) softRefresh();
+    persistDrafts();
+  });
+  window.addEventListener("pagehide", persistDrafts);
+  if (msgForm) {
+    msgForm.elements.body.addEventListener("input", () => {
+      saveJson(STORE_DRAFT_MSG, { body: msgForm.elements.body.value || "" });
+    });
+  }
+
   $("#connect-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     connectErr.hidden = true;
@@ -355,8 +550,8 @@
     sessionStorage.removeItem(STORE_BASE);
     sessionStorage.removeItem(STORE_KEY);
     state = { base: "", key: "", projectId: null, me: null };
-    // Keep pendingTask in sessionStorage so reload/reconnect can resume safely.
     pendingTask = loadPending();
+    pendingMsg = loadPendingMsg();
     showConnect();
   });
 
@@ -373,26 +568,60 @@
     });
   });
 
-  $("#msg-form").addEventListener("submit", async (ev) => {
+  msgForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     msgErr.hidden = true;
+    msgOk.hidden = true;
     const body = ev.target.elements.body.value.trim();
-    if (!body) return;
+    if (!body && !pendingMsg) return;
+
+    pendingMsg = loadPendingMsg();
+    if (pendingMsg) {
+      if (pendingMsg.projectId !== state.projectId) {
+        msgErr.hidden = false;
+        msgErr.textContent = "Незавершённое сообщение относится к другому проекту.";
+        return;
+      }
+      if (body && body !== pendingMsg.body) {
+        msgErr.hidden = false;
+        msgErr.textContent = "Текст изменён при незавершённой отправке. Верните текст или сбросьте (очистите поле и отключитесь/подключитесь).";
+        ev.target.elements.body.value = pendingMsg.body;
+        return;
+      }
+    } else {
+      savePendingMsg({
+        idempotencyKey: uuid(),
+        clientMessageId: uuid(),
+        projectId: state.projectId,
+        body,
+      });
+    }
+
+    btnSend.disabled = true;
     try {
       await api(`/api/v1/projects/${state.projectId}/messages`, {
         method: "POST",
-        idempotencyKey: uuid(),
+        idempotencyKey: pendingMsg.idempotencyKey,
         body: {
-          client_message_id: uuid(),
+          client_message_id: pendingMsg.clientMessageId,
           kind: "note",
-          body,
+          body: pendingMsg.body,
         },
       });
+      clearPendingMsg();
+      saveJson(STORE_DRAFT_MSG, null);
       ev.target.elements.body.value = "";
+      msgOk.hidden = false;
+      msgOk.textContent = "Отправлено (подтверждено сервером).";
       await refresh();
     } catch (e) {
+      savePendingMsg(pendingMsg);
       msgErr.hidden = false;
-      msgErr.textContent = e.message || String(e);
+      msgErr.textContent = (e.message || String(e)) + " — статус неизвестен до подтверждения; повтор безопасен.";
+      if (e.kind === "network" || e.kind === "html") setConnState("lost");
+    } finally {
+      btnSend.disabled = false;
+      updatePendingMsgUi();
     }
   });
 
@@ -445,6 +674,7 @@
         body: pendingTask.payload,
       });
       clearPending();
+      saveJson(STORE_DRAFT_TASK, null);
       taskForm.elements.title.value = "";
       taskForm.elements.requirements.value = "";
       taskForm.elements.acceptance.value = "";
@@ -452,7 +682,6 @@
       taskOk.textContent = `Создано: ${created.id || created.title || "ok"} (${created.status || "draft"})`;
       await refresh();
     } catch (e) {
-      // Keep immutable pending in sessionStorage for reload/retry.
       savePending(pendingTask);
       taskErr.hidden = false;
       const code = e.data && e.data.error && e.data.error.code;
@@ -462,6 +691,7 @@
       } else {
         taskErr.textContent = (e.message || String(e)) + " — можно безопасно повторить тот же запрос.";
       }
+      if (e.kind === "network" || e.kind === "html") setConnState("lost");
     } finally {
       btnCreate.disabled = false;
       updatePendingUi();
@@ -470,17 +700,25 @@
 
   pendingTask = loadPending();
   updatePendingUi();
+  pendingMsg = loadPendingMsg();
+  updatePendingMsgUi();
 
-  const savedBase = sessionStorage.getItem(STORE_BASE);
-  const savedKey = sessionStorage.getItem(STORE_KEY);
-  if (savedBase && savedKey) {
-    connect(savedBase, savedKey).catch((e) => showConnect(e.message || String(e)));
-  } else {
+  (async () => {
+    const form = $("#connect-form");
     const params = new URLSearchParams(location.search);
-    const relay = params.get("relay");
-    if (relay) {
-      const form = $("#connect-form");
-      form.elements.base.value = relay;
+    const relayParam = params.get("relay");
+    const pointed = await fetchPointerBase();
+    const savedBase = sessionStorage.getItem(STORE_BASE);
+    const savedKey = sessionStorage.getItem(STORE_KEY);
+
+    if (relayParam) form.elements.base.value = relayParam;
+    else if (savedBase) form.elements.base.value = savedBase;
+    else if (pointed) form.elements.base.value = pointed;
+
+    if (savedBase && savedKey) {
+      connect(savedBase, savedKey).catch((e) => showConnect(e.message || String(e)));
+    } else {
+      setConnState("idle");
     }
-  }
+  })();
 })();

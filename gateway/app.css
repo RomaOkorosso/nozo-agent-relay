@@ -106,3 +106,22 @@ input, textarea, select {
 .check { display: flex; gap: 0.4rem; align-items: center; font-weight: 600; margin-bottom: 0.75rem; }
 .ok { color: #0a7a3e; margin-top: 0.5rem; font-size: 0.92rem; }
 .side { max-height: calc(100vh - 5rem); overflow: auto; }
+.status-chip {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.status-chip[data-state="connected"] { border-color: #0a7a3e; color: #0a7a3e; }
+.status-chip[data-state="connecting"],
+.status-chip[data-state="recovering"] { border-color: #c48a00; color: #8a5a00; }
+.status-chip[data-state="lost"],
+.status-chip[data-state="auth"] { border-color: var(--danger); color: var(--danger); }
+@media (max-width: 800px) {
+  .side { max-height: none; }
+  .messages { height: min(45vh, 22rem); }
+  .composer textarea { font-size: 16px; } /* avoid iOS zoom */
+  .btn.primary { min-height: 2.75rem; width: 100%; }
+  .top { flex-wrap: wrap; }
+}
