@@ -1,6 +1,9 @@
 {
-  "relay_base": "https://roma-gv628rc.tailbfec94.ts.net",
-  "updated_at": "2026-11-01T10:13:56Z",
-  "transport": "tailscale_funnel",
-  "note": "Public coordinator HTTPS via Tailscale Funnel. No keys. Gateway may auto-fill this URL."
+  "relay_base": "https://6045b0669f3b07.lhr.life",
+  "relay_fallbacks": [
+    "https://roma-gv628rc.tailbfec94.ts.net"
+  ],
+  "updated_at": "2026-11-01T11:23:00Z",
+  "transport": "localhost_run_ipv4_primary",
+  "note": "Primary is free IPv4 tunnel (lhr.life). Tailscale Funnel AAAA currently times out from many browsers → Failed to fetch; Funnel kept as fallback / owner Serve. No keys."
 }

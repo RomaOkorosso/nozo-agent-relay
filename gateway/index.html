@@ -17,7 +17,7 @@
 
   <section id="connect-panel" class="card">
     <h1>Подключение к Relay</h1>
-    <p class="muted">Статический шлюз на GitHub Pages. Bearer-ключ хранится только в <code>sessionStorage</code> этого браузера — не в URL и не в репозитории. Публичный адрес Relay подставляется из <code>pointer.json</code> (Tailscale Funnel), при необходимости его можно заменить вручную.</p>
+    <p class="muted">Статический шлюз на GitHub Pages. Bearer-ключ только в <code>sessionStorage</code>. URL берётся из <code>pointer.json</code> (сейчас IPv4-туннель + Funnel fallback): при Failed to fetch Gateway сам пробует запасной адрес.</p>
     <form id="connect-form">
       <label class="field">Relay base URL
         <input name="base" type="url" required placeholder="https://….ts.net" autocomplete="off" spellcheck="false" inputmode="url">

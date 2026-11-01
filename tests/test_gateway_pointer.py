@@ -12,11 +12,15 @@ GW = ROOT / "gateway"
 def test_pointer_json_has_https_relay_no_secrets():
     doc = json.loads((GW / "pointer.json").read_text(encoding="utf-8"))
     assert doc["relay_base"].startswith("https://")
-    assert "ts.net" in doc["relay_base"] or "github.io" not in doc["relay_base"]
+    assert "github.io" not in doc["relay_base"]
     blob = json.dumps(doc)
     assert "nzr_" not in blob
     assert "password" not in blob.lower()
     assert "sk-" not in blob
+    fbs = doc.get("relay_fallbacks") or []
+    assert isinstance(fbs, list)
+    for u in fbs:
+        assert str(u).startswith("https://")
 
 
 def test_gateway_js_has_states_and_pointer_and_msg_idempotency():
@@ -29,6 +33,8 @@ def test_gateway_js_has_states_and_pointer_and_msg_idempotency():
         "classifyFetchFailure",
         "подтверждено сервером",
         "требуется вход",
+        "connectWithFailover",
+        "relay_fallbacks",
     ):
         assert needle in js, needle
     html = (GW / "index.html").read_text(encoding="utf-8")

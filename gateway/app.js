@@ -373,7 +373,10 @@
     taskOk.textContent = "Найдена незавершённая отправка (ответ мог потеряться). Нажмите «Повторить» с тем же телом — дубль не создастся. Или сбросьте.";
   }
 
-  async function fetchPointerBase() {
+  /** @type {string[]} */
+  let pointerCandidates = [];
+
+  async function fetchPointerDoc() {
     try {
       const res = await fetch(POINTER_URL, {
         cache: "no-store",
@@ -381,13 +384,45 @@
         redirect: "error",
       });
       if (!res.ok) return null;
-      const data = await res.json();
-      const base = normalizeBase(data && data.relay_base);
-      if (!base || !isTrustedRelayBase(base, { fromPointer: true })) return null;
-      return base;
+      return await res.json();
     } catch {
       return null;
     }
+  }
+
+  function candidatesFromPointer(data) {
+    if (!data) return [];
+    const out = [];
+    const push = (u) => {
+      const b = normalizeBase(u);
+      if (b && isTrustedRelayBase(b, { fromPointer: true }) && !out.includes(b)) out.push(b);
+    };
+    push(data.relay_base);
+    const fb = data.relay_fallbacks;
+    if (Array.isArray(fb)) fb.forEach(push);
+    return out;
+  }
+
+  async function fetchPointerBase() {
+    const data = await fetchPointerDoc();
+    pointerCandidates = candidatesFromPointer(data);
+    return pointerCandidates[0] || null;
+  }
+
+  async function connectWithFailover(bases, key) {
+    const list = (bases || []).filter(Boolean);
+    let lastErr = null;
+    for (const base of list) {
+      try {
+        await connect(base, key);
+        return;
+      } catch (e) {
+        lastErr = e;
+        if (e.kind === "auth") throw e;
+        // network/html → try next trusted candidate
+      }
+    }
+    throw lastErr || new Error("Нет доступного Relay URL");
   }
 
   async function connect(base, key) {
@@ -563,14 +598,30 @@
       recovering = true;
       setConnState("recovering");
       try {
-        // Re-read pointer in case transport URL changed (rare for Funnel; useful for fallback tunnels).
         const pointed = await fetchPointerBase();
-        if (pointed && pointed !== state.base && isTrustedRelayBase(pointed, { fromPointer: true })) {
-          state.base = pointed;
-          sessionStorage.setItem(STORE_BASE, state.base);
+        const tryBases = [
+          state.base,
+          ...pointerCandidates.filter((b) => b !== state.base),
+        ].filter(Boolean);
+        let ok = false;
+        let last = null;
+        for (const b of tryBases) {
+          try {
+            state.base = b;
+            await refresh();
+            sessionStorage.setItem(STORE_BASE, state.base);
+            setConnState("connected", state.base.replace(/^https?:\/\//, ""));
+            ok = true;
+            break;
+          } catch (err) {
+            last = err;
+            if (err.kind === "auth") throw err;
+          }
         }
-        await refresh();
-        setConnState("connected", state.base.replace(/^https?:\/\//, ""));
+        if (!ok) {
+          if (pointed) state.base = pointed;
+          if (last && last.kind !== "auth") setConnState("lost");
+        }
       } catch (e2) {
         if (e2.kind !== "auth") setConnState("lost");
       } finally {
@@ -594,8 +645,12 @@
     ev.preventDefault();
     connectErr.hidden = true;
     const fd = new FormData(ev.target);
+    const typed = normalizeBase(fd.get("base"));
+    const key = fd.get("key");
     try {
-      await connect(fd.get("base"), fd.get("key"));
+      await fetchPointerBase();
+      const bases = [typed, ...pointerCandidates.filter((b) => b !== typed)];
+      await connectWithFailover(bases, key);
     } catch (e) {
       showConnect(e.message || String(e));
     }
@@ -801,28 +856,23 @@
     const savedKey = sessionStorage.getItem(STORE_KEY);
 
     if (relayParam && isTrustedRelayBase(relayParam)) form.elements.base.value = relayParam;
-    else if (savedBase) form.elements.base.value = savedBase;
     else if (pointed) form.elements.base.value = pointed;
+    else if (savedBase) form.elements.base.value = savedBase;
 
     if (savedBase && savedKey) {
       try {
-        await connect(savedBase, savedKey);
+        const bases = [
+          savedBase,
+          ...pointerCandidates.filter((b) => b !== savedBase),
+        ];
+        await connectWithFailover(bases, savedKey);
+        form.elements.base.value = state.base;
       } catch (e) {
-        // SA-05: dead saved endpoint → one bounded retry to trusted same-origin pointer (Bearer only there).
-        showConnect(e.message || String(e));
-        if (pointed && isTrustedRelayBase(pointed, { fromPointer: true })) {
-          form.elements.base.value = pointed;
-        }
-        if (pointed && pointed !== savedBase && isTrustedRelayBase(pointed, { fromPointer: true })) {
-          try {
-            await connect(pointed, savedKey);
-          } catch (e2) {
-            showConnect(
-              (e2.message || String(e2)) +
-                " — сохранённый URL недоступен; актуальный pointer тоже не ответил. Проверьте Funnel."
-            );
-          }
-        }
+        showConnect(
+          (e.message || String(e)) +
+            (pointed ? " — попробуйте URL из pointer или IPv4-fallback." : "")
+        );
+        if (pointed) form.elements.base.value = pointed;
       }
     } else {
       setConnState("idle");

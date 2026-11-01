@@ -35,29 +35,36 @@ if ! grep -Eq "127\\.0\\.0\\.1:${PORT}|localhost:${PORT}" <<<"$status"; then
   exit 1
 fi
 
-desired="https://${HOST}"
-mkdir -p "$POINTER_DIR"
-prev=""
-if [[ -f "$POINTER_FILE" ]]; then
-  prev="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('relay_base',''))" "$POINTER_FILE" 2>/dev/null || true)"
+funnel_url="https://${HOST}"
+# Prefer live IPv4 free-tunnel URL as Pages primary when present (Funnel AAAA often times out → browser Failed to fetch).
+ipv4_tunnel=""
+if [[ -s /tmp/nozo-public-url.txt ]]; then
+  ipv4_tunnel="$(tr -d '[:space:]' </tmp/nozo-public-url.txt || true)"
 fi
-if [[ "$prev" != "$desired" ]]; then
-  python3 - <<PY
+mkdir -p "$POINTER_DIR"
+python3 - <<PY
 import json
 from datetime import datetime, timezone
-path = ${POINTER_FILE@Q}
+from pathlib import Path
+path = Path(${POINTER_FILE@Q})
+funnel = ${funnel_url@Q}
+ipv4 = ${ipv4_tunnel@Q}
+fallbacks = []
+if ipv4 and ipv4.startswith("https://") and ipv4 != funnel:
+    primary, transport = ipv4, "localhost_run_ipv4_primary"
+    fallbacks = [funnel]
+else:
+    primary, transport = funnel, "tailscale_funnel"
 doc = {
-  "relay_base": ${desired@Q},
+  "relay_base": primary,
+  "relay_fallbacks": fallbacks,
   "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-  "transport": "tailscale_funnel",
-  "note": "Public coordinator HTTPS via Tailscale Funnel. No keys. Local file; Pages needs commit/push to publish.",
+  "transport": transport,
+  "note": "No keys. Pages needs commit/push to publish pointer. Funnel kept for tailnet/owner; IPv4 tunnel preferred for browsers when available.",
 }
-open(path, "w", encoding="utf-8").write(json.dumps(doc, indent=2) + "\n")
-print("wrote", path, "->", doc["relay_base"])
+path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+print("wrote", path, "->", doc["relay_base"], "fallbacks=", doc["relay_fallbacks"])
 PY
-else
-  echo "pointer unchanged: $desired"
-fi
 
 echo "SERVE_FUNNEL=https://${HOST}"
 echo "$status" | head -20
