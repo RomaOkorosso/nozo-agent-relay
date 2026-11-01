@@ -55,9 +55,9 @@ if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d.get("status"
 else
   echo "$(date -Is) public_probe_soft_fail" >&2
 fi
-exit 0
 
 # Keep Pages pointer in sync when free-tunnel URL rotates (rate-limited push).
+# Must stay reachable after the Funnel probe — do not exit before this block.
 if [[ -x "$ROOT/scripts/publish_pointer_if_changed.sh" ]]; then
   "$ROOT/scripts/publish_pointer_if_changed.sh" >/tmp/nozo-pointer-publish.log 2>&1 || true
 fi
