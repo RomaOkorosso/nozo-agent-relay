@@ -328,7 +328,7 @@
 
   async function taskControl(btn) {
     const command = btn.dataset.command;
-    const verbs = { pause: 'Пауза', resume: 'Продолжить', cancel: 'Отмена', reassign: 'Переназначение' };
+    const verbs = { pause: 'Пауза', resume: 'Продолжить', cancel: 'Отмена', complete: 'Завершение', reassign: 'Переназначение' };
     const payload = { command, reason: reasonText('Из панели владельца: ' + (verbs[command] || command)) };
     if (command === 'reassign') {
       const scope = btn.closest('.fold-body') || document;

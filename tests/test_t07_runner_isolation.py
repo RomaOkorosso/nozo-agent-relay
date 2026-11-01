@@ -1201,7 +1201,7 @@ def test_schema_v4_adds_repo_binding_columns_idempotently(env: Any, tmp_path: Pa
     from nozo_relay.db.engine import create_sqlite_engine
     from nozo_relay.db.schema import SCHEMA_VERSION, ensure_schema, migrate_to_current, read_schema_version
 
-    assert SCHEMA_VERSION == 5
+    assert SCHEMA_VERSION == 6
     src = sqlite3.connect(env.settings.db_path)
     dst_path = tmp_path / "v3.sqlite"
     dst = sqlite3.connect(dst_path)

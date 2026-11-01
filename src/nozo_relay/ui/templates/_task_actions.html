@@ -10,6 +10,7 @@
     {% if actions.enqueue %}<button type="button" class="btn btn-primary" data-act="enqueue">В очередь</button>{% endif %}
     {% if actions.pause %}<button type="button" class="btn btn-secondary" data-act="control" data-command="pause">Пауза</button>{% endif %}
     {% if actions.resume %}<button type="button" class="btn btn-secondary" data-act="control" data-command="resume">Продолжить</button>{% endif %}
+    {% if actions.complete %}<button type="button" class="btn btn-primary" data-act="control" data-command="complete">Отметить выполненной</button>{% endif %}
   </div>
   {% if is_owner and actions.reassign %}
   <details class="fold">

@@ -353,10 +353,12 @@ def allowed_actions(status: str) -> dict[str, bool]:
     """Which control buttons to offer. Presentation only: the API re-validates every command."""
     s = status
     terminal = s in ("completed", "cancelled")
+    idle_completable = s in ("draft", "queued", "changes_requested", "awaiting_review", "paused", "blocked")
     return {
         "enqueue": s == "draft",
         "pause": s in ("queued", "claimed", "running", "awaiting_review", "reviewing", "changes_requested"),
         "resume": s in ("paused", "blocked"),
+        "complete": idle_completable,
         "cancel": not terminal,
         "reassign": not terminal and s != "stop_requested",
         "stopping": s == "stop_requested",

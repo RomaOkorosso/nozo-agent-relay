@@ -572,11 +572,15 @@
     const btnEnq = $("#btn-enqueue");
     const btnPause = $("#btn-pause");
     const btnResume = $("#btn-resume");
+    const btnComplete = $("#btn-complete");
     const btnCancel = $("#btn-cancel");
+    const terminal = ["cancelled", "completed"].includes(st);
+    const idleCompletable = ["draft", "queued", "changes_requested", "awaiting_review", "paused", "blocked"].includes(st);
     if (btnEnq) btnEnq.hidden = st !== "draft";
     if (btnPause) btnPause.hidden = !["queued", "claimed", "running", "awaiting_review", "reviewing", "changes_requested"].includes(st);
-    if (btnResume) btnResume.hidden = st !== "paused";
-    if (btnCancel) btnCancel.hidden = ["cancelled", "done", "failed"].includes(st) || !st;
+    if (btnResume) btnResume.hidden = !["paused", "blocked"].includes(st);
+    if (btnComplete) btnComplete.hidden = !idleCompletable;
+    if (btnCancel) btnCancel.hidden = terminal || !st;
   }
 
   function renderTaskDetail(task) {
@@ -1034,6 +1038,14 @@
     btnResume.addEventListener("click", () =>
       runSelectedAction((t) => controlTask(t, "resume"), "Resume отправлен")
     );
+  }
+  const btnComplete = $("#btn-complete");
+  if (btnComplete) {
+    btnComplete.addEventListener("click", () => {
+      const reason = window.prompt("Причина завершения?", "completed via Pages gateway");
+      if (!reason) return;
+      runSelectedAction((t) => controlTask(t, "complete", reason), "Задача отмечена выполненной");
+    });
   }
   const btnCancel = $("#btn-cancel");
   if (btnCancel) {

@@ -255,10 +255,10 @@ def restore_backup(
     manifest = verify_backup(root)
 
     found = manifest["schema_version"]
-    if found != SCHEMA_VERSION and not (migrate and found in (2, 3, 4)):
+    if found != SCHEMA_VERSION and not (migrate and found in (2, 3, 4, 5)):
         raise SchemaError(
             f"backup has schema v{found}; this build requires v{SCHEMA_VERSION}. "
-            + ("Use --migrate to upgrade the restored COPY (v2/v3/v4 only)." if found in (2, 3, 4) else "Restore with a matching build.")
+            + ("Use --migrate to upgrade the restored COPY (v2/v3/v4/v5 only)." if found in (2, 3, 4, 5) else "Restore with a matching build.")
         )
 
     _private_dir(target)

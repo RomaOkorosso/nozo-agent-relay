@@ -147,6 +147,8 @@ class ControlCommand(StrEnum):
     CANCEL = "cancel"
     REASSIGN = "reassign"
     REVISE = "revise"
+    # Owner/coordinator (task.control): mark idle work completed without an auditor audit_pass.
+    COMPLETE = "complete"
     # Owner-only priority path (POST /controls/emergency-stop); not accepted in ControlCreate DTO.
     EMERGENCY_STOP = "emergency_stop"
 

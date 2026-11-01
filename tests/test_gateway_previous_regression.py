@@ -94,3 +94,17 @@ def test_create_with_enqueue_leaves_queued_not_draft_spam(gw):
     assert items[0]['status']=='queued', items[0]
     assert c.get('enqueues') and c['enqueues'][-1]['status'] in (200,201)
     assert page.locator('#task-ok').inner_text().lower().find('queued')>=0
+
+def test_complete_marks_idle_task_completed(gw):
+    page,c,fill,click,api=gw
+    page.locator('[name=enqueue_after_create]').uncheck()
+    fill('mark me done');click();page.locator('#task-ok').wait_for(state='visible')
+    page.locator('#task-list .task-item').first.click()
+    page.locator('#btn-complete').wait_for(state='visible')
+    page.once('dialog', lambda d: d.accept('completed via gateway test'))
+    page.locator('#btn-complete').click()
+    page.locator('#task-action-ok').wait_for(state='visible')
+    items=api.req('owner','GET',api.p('/tasks')).json()['items']
+    assert len(items)==1 and items[0]['status']=='completed', items
+    opts=page.locator('#task-status-filter option').all_text_contents()
+    assert 'completed' in opts and 'done' not in opts

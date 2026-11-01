@@ -44,6 +44,13 @@ TASK_TRANSITIONS: dict[str, tuple[frozenset[T], frozenset[T]]] = {
         ),
         frozenset({T.CANCELLED}),
     ),
+    # Owner/coordinator force-complete of idle work (no active run). Distinct from auditor audit_pass.
+    "complete_idle": (
+        frozenset(
+            {T.DRAFT, T.QUEUED, T.CHANGES_REQUESTED, T.AWAITING_REVIEW, T.PAUSED, T.BLOCKED}
+        ),
+        frozenset({T.COMPLETED}),
+    ),
     "lease_lost": (frozenset({T.CLAIMED, T.RUNNING, T.REVIEWING}), frozenset({T.BLOCKED})),
     "runtime_fail": (
         frozenset({T.CLAIMED, T.RUNNING, T.REVIEWING}),

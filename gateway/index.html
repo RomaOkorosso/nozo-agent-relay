@@ -47,7 +47,9 @@
             <option value="awaiting_review">awaiting_review</option>
             <option value="paused">paused</option>
             <option value="cancelled">cancelled</option>
-            <option value="done">done</option>
+            <option value="completed">completed</option>
+            <option value="blocked">blocked</option>
+            <option value="changes_requested">changes_requested</option>
           </select>
         </label>
         <ul id="task-list" class="list"></ul>
@@ -61,6 +63,7 @@
             <button type="button" class="btn primary" id="btn-enqueue" hidden>В очередь</button>
             <button type="button" class="btn" id="btn-pause" hidden>Pause</button>
             <button type="button" class="btn" id="btn-resume" hidden>Resume</button>
+            <button type="button" class="btn primary" id="btn-complete" hidden>Отметить выполненной</button>
             <button type="button" class="btn" id="btn-cancel" hidden>Cancel</button>
           </div>
           <p id="task-action-error" class="err" role="alert" hidden></p>

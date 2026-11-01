@@ -64,7 +64,7 @@ ExpectedVersion = Annotated[int, Field(ge=1, description="Task version you last 
 Limit = Annotated[int | None, Field(ge=1, le=200, description="Page size, default 50, max 200")]
 
 # The only control commands exposed over MCP ("limited"): no resume, no project-wide or emergency controls.
-McpControlCommand = Literal["pause", "cancel", "reassign", "revise"]
+McpControlCommand = Literal["pause", "cancel", "complete", "reassign", "revise"]
 _CONTROL_ADAPTER: TypeAdapter[Any] = TypeAdapter(ControlCreate)
 
 

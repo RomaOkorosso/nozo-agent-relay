@@ -1,4 +1,4 @@
-"""Controls: pause / resume / cancel / reassign / revise / emergency-stop, fencing and stop receipts.
+"""Controls: pause / resume / cancel / complete / reassign / revise / emergency-stop, fencing and stop receipts.
 
 A control that touches an active run first FENCES it (job.lease_epoch += 1, run+job -> stopping,
 task -> stop_requested) so the old holder can no longer submit results or start work. The task only
@@ -260,6 +260,36 @@ def _do_cancel(ws, clock, actor_id, project, task, command, reason, payload, ar)
     return ctl
 
 
+def _do_complete(ws, clock, actor_id, project, task, command, reason, payload, ar) -> Control:  # noqa: ANN001
+    """Mark idle work completed (owner/coordinator). Does not replace auditor audit_pass for active runs.
+
+    Active / stopping tasks must be paused or cancelled first — force-complete never invents a stop receipt.
+    """
+    if ar is not None or task.status == TaskStatus.STOP_REQUESTED.value:
+        raise conflict(
+            "invalid_state",
+            "Cannot force-complete a task with an active or stopping run; pause/cancel first, then complete",
+            status=task.status,
+        )
+    if task.status not in (
+        TaskStatus.DRAFT.value,
+        TaskStatus.QUEUED.value,
+        TaskStatus.CHANGES_REQUESTED.value,
+        TaskStatus.AWAITING_REVIEW.value,
+        TaskStatus.PAUSED.value,
+        TaskStatus.BLOCKED.value,
+    ):
+        raise conflict("invalid_state", f"Cannot force-complete a task in status {task.status}")
+    cancel_ready_jobs(ws, clock, task, actor_id=actor_id)
+    ctl = _new_control(
+        ws, clock, project.id, task.id, command, actor_id, reason, payload, status=ControlStatus.CONFIRMED
+    )
+    set_task_status(
+        ws, clock, task, "complete_idle", TaskStatus.COMPLETED, actor_id=actor_id, payload={"control_id": ctl.id}
+    )
+    return ctl
+
+
 def _do_resume(ws, clock, settings, actor_id, project, task, command, reason, payload) -> Control:  # noqa: ANN001
     if task.status not in (TaskStatus.PAUSED.value, TaskStatus.BLOCKED.value):
         raise conflict("invalid_state", f"Only paused or blocked tasks can be resumed (status={task.status})")
@@ -461,6 +491,8 @@ def apply_task_command(
         return _do_pause(ws, clock, actor.id, project, task, command, reason, payload, ar)
     if command is ControlCommand.CANCEL:
         return _do_cancel(ws, clock, actor.id, project, task, command, reason, payload, ar)
+    if command is ControlCommand.COMPLETE:
+        return _do_complete(ws, clock, actor.id, project, task, command, reason, payload, ar)
     if command is ControlCommand.RESUME:
         return _do_resume(ws, clock, settings, actor.id, project, task, command, reason, payload)
     if command in (ControlCommand.REASSIGN, ControlCommand.REVISE):

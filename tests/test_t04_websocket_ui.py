@@ -946,7 +946,7 @@ def test_task_page_sections_timeline_reports_and_blocking_reasons(api: Api):
 def test_owner_controls_are_rendered_per_status_and_agents_get_no_buttons(api: Api):
     t = api.create_task()
     draft = get_html(api, f"/ui/projects/{api.project_id}/tasks/{t['id']}/actions").text
-    assert 'data-act="enqueue"' in draft and 'data-command="cancel"' in draft and 'data-command="pause"' not in draft
+    assert 'data-act="enqueue"' in draft and 'data-command="cancel"' in draft and 'data-command="complete"' in draft and 'data-command="pause"' not in draft
     api.enqueue(t)
     queued = get_html(api, f"/ui/projects/{api.project_id}/tasks/{t['id']}/actions").text
     assert 'data-command="pause"' in queued and 'data-command="reassign"' in queued and "Последствия" in queued

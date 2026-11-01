@@ -21,7 +21,10 @@ from nozo_relay.db.models import Base, SchemaVersion
 # ADD COLUMN is skipped when the column already exists, so the step is idempotent.
 # v5 (T12/F02): additive ``runs.supervisor_principal_id`` (FK principals, nullable for old rows). ``migrate_to_current``
 # upgrades v2/v3/v4 in place; the ADD COLUMN is skipped when the column already exists.
-SCHEMA_VERSION = 5
+# v6: widen ``controls.command`` CHECK to include ``complete`` (owner/coordinator force-complete of
+# idle tasks). Controls table rebuild only; ``tasks.desired_control`` CHECK unchanged on migrated DBs
+# (idle complete never sets desired_control). Fresh installs get both CHECKs from the enum.
+SCHEMA_VERSION = 6
 _V3_ADDITIONS: tuple[str, ...] = (
     "ALTER TABLE projects ADD COLUMN last_claimed_at BIGINT",
     "ALTER TABLE sessions ADD COLUMN reauth_at BIGINT",
@@ -119,17 +122,80 @@ def _has_column(conn, table: str, column: str) -> bool:  # noqa: ANN001
     return any(r[1] == column for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall())
 
 
-def migrate_to_current(engine: Engine, clock: Clock | None = None) -> tuple[int, int]:
-    """In-place additive migration v2/v3/v4 -> v5. Returns (from, to). Run with the server stopped, after a backup.
+_V6_CONTROL_COMMANDS = (
+    "pause",
+    "resume",
+    "cancel",
+    "reassign",
+    "revise",
+    "complete",
+    "emergency_stop",
+)
 
-    Only a v2 or v3 database is accepted; anything else is refused (never guess). Atomic: one transaction.
+
+def _widen_control_command_checks(conn) -> None:  # noqa: ANN001
+    """Rebuild ``controls.command`` CHECK so ``complete`` is accepted (SQLite cannot ALTER CHECK).
+
+    Idle force-complete never writes ``tasks.desired_control='complete'``, so the tasks CHECK is left
+    unchanged (avoiding a heavy rebuild under live FKs). Fresh DBs created by ``ensure_schema`` still
+    get both CHECKs from the current ``ControlCommand`` enum.
+    """
+    cmds = ",".join(f"'{c}'" for c in _V6_CONTROL_COMMANDS)
+    # Disable FK checks for the duration of this connection (table swap).
+    conn.execute(text("PRAGMA foreign_keys=OFF"))
+    row = conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='controls'")).scalar()
+    if row and "'complete'" in row:
+        return
+    conn.execute(
+        text(
+            f"""
+            CREATE TABLE controls__v6 (
+                id VARCHAR(36) NOT NULL,
+                project_id VARCHAR(36) NOT NULL,
+                task_id VARCHAR(36),
+                command VARCHAR(16) NOT NULL,
+                requested_by VARCHAR(36) NOT NULL,
+                target_run_id VARCHAR(36),
+                target_epoch INTEGER,
+                status VARCHAR(16) NOT NULL,
+                payload_json TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                requested_at BIGINT NOT NULL,
+                confirmed_at BIGINT,
+                PRIMARY KEY (id),
+                CONSTRAINT fk_controls_task_project FOREIGN KEY(task_id, project_id) REFERENCES tasks (id, project_id),
+                CONSTRAINT ck_command_enum CHECK (command IN ({cmds})),
+                CONSTRAINT ck_status_enum CHECK (status IN ('requested','stopping','confirmed','unknown')),
+                CONSTRAINT ck_payload_json_json CHECK (json_valid(payload_json)),
+                FOREIGN KEY(project_id) REFERENCES projects (id),
+                FOREIGN KEY(requested_by) REFERENCES principals (id),
+                FOREIGN KEY(target_run_id) REFERENCES runs (id)
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            "INSERT INTO controls__v6 SELECT id, project_id, task_id, command, requested_by, "
+            "target_run_id, target_epoch, status, payload_json, reason, requested_at, confirmed_at FROM controls"
+        )
+    )
+    conn.execute(text("DROP TABLE controls"))
+    conn.execute(text("ALTER TABLE controls__v6 RENAME TO controls"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_controls_project_id ON controls (project_id)"))
+
+
+def migrate_to_current(engine: Engine, clock: Clock | None = None) -> tuple[int, int]:
+    """In-place migration v2/v3/v4/v5 -> v6. Returns (from, to). Run with the server stopped, after a backup.
+
+    Only a v2–v5 database is accepted; anything else is refused (never guess). Atomic: one transaction.
     """
     clock = clock or SystemClock()
     found = read_schema_version(engine)
     if found == SCHEMA_VERSION:
         return found, found
-    if found not in (2, 3, 4):
-        raise SchemaError(f"cannot migrate schema {found!r}; only v2/v3/v4 -> v{SCHEMA_VERSION} is supported")
+    if found not in (2, 3, 4, 5):
+        raise SchemaError(f"cannot migrate schema {found!r}; only v2/v3/v4/v5 -> v{SCHEMA_VERSION} is supported")
     with engine.begin() as conn:
         if found == 2:
             for stmt in _V3_ADDITIONS:
@@ -138,12 +204,14 @@ def migrate_to_current(engine: Engine, clock: Clock | None = None) -> tuple[int,
                     if _has_column(conn, table, column):
                         continue
                 conn.execute(text(stmt))
-        for table, column, ddl in _V4_ADDITIONS:
-            if not _has_column(conn, table, column):
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
-        for table, column, ddl in _V5_ADDITIONS:
-            if not _has_column(conn, table, column):
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+        if found in (2, 3, 4):
+            for table, column, ddl in _V4_ADDITIONS:
+                if not _has_column(conn, table, column):
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            for table, column, ddl in _V5_ADDITIONS:
+                if not _has_column(conn, table, column):
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+        _widen_control_command_checks(conn)
         conn.execute(
             text("UPDATE schema_version SET version = :v, applied_at = :t WHERE id = 1"),
             {"v": SCHEMA_VERSION, "t": clock.now_ms()},

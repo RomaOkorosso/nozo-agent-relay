@@ -163,7 +163,7 @@ async def test_toolset_is_closed_and_has_no_owner_or_execution_tools(mcp: Harnes
     approval = next(t for t in tools if t.name == "relay_request_approval")
     assert "can not approve" in approval.description.lower()
     control = next(t for t in tools if t.name == "relay_control_task")
-    assert set(control.input_schema["properties"]["command"]["enum"]) == {"pause", "cancel", "reassign", "revise"}
+    assert set(control.input_schema["properties"]["command"]["enum"]) == {"pause", "cancel", "complete", "reassign", "revise"}
     for t in tools:  # every tool publishes input AND output JSON Schema
         assert t.input_schema["type"] == "object" and t.output_schema is not None, t.name
 

@@ -227,6 +227,10 @@ class CancelControl(_ControlBase):
     command: Literal["cancel"]
 
 
+class CompleteControl(_ControlBase):
+    command: Literal["complete"]
+
+
 class ReassignControl(_ControlBase):
     command: Literal["reassign"]
     implementer_id: UuidStr | None = None
@@ -245,7 +249,7 @@ class ReviseControl(_ControlBase):
 
 
 ControlCreate = Annotated[
-    PauseControl | ResumeControl | CancelControl | ReassignControl | ReviseControl,
+    PauseControl | ResumeControl | CancelControl | CompleteControl | ReassignControl | ReviseControl,
     Field(discriminator="command"),
 ]
 
