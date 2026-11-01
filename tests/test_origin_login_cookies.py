@@ -48,6 +48,18 @@ def test_html_login_rejects_opaque_null_origin_by_default(env: Env):
         assert "Origin не разрешён" in r.text or "origin" in r.text.lower()
 
 
+def test_login_page_referrer_policy_same_origin_not_no_referrer(env: Env):
+    """RELAY-04: no-referrer makes Firefox/Chrome send Origin:null on form POST."""
+    with TestClient(env.app, base_url="http://127.0.0.1:8765") as c:
+        r = c.get("/login")
+        assert r.status_code == 200
+        policy = r.headers.get("referrer-policy", "").lower()
+        assert policy == "same-origin"
+        assert "no-referrer" not in policy
+        assert 'name="referrer" content="same-origin"' in r.text
+        assert 'content="no-referrer"' not in r.text
+
+
 def test_cookie_secure_false_on_loopback_true_on_ts_host(env: Env):
     from starlette.requests import Request
 

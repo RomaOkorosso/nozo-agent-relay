@@ -150,7 +150,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        # same-origin (not no-referrer): browsers send Origin:null on POST when
+        # Referrer-Policy is no-referrer, which breaks HTML form login Origin checks (RELAY-04).
+        response.headers["Referrer-Policy"] = "same-origin"
         response.headers.setdefault("Cache-Control", "no-store")
         return response
 
