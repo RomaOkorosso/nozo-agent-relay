@@ -2,17 +2,17 @@
 
 Обновлено: 2026-11-01. Ноутбук должен быть онлайн и в сессии пользователя `roma` (systemd --user).
 
+**Инструкция «вставь в проект» для Ромы / Codex / ChatGPT:** [`CONNECT.md`](CONNECT.md).
+
 ## Архитектура
 
 | Сценарий | Как |
 |---|---|
-| ChatGPT / любой браузер → coordinator | GitHub Pages `https://romaokorosso.github.io/nozo-agent-relay/` → API на **Tailscale Funnel** `https://roma-gv628rc.tailbfec94.ts.net` (Bearer) |
-| Рома на ноутбуке → owner | `http://127.0.0.1:8765/login` **или** `https://roma-gv628rc.tailbfec94.ts.net/login` из tailnet (Serve) |
-| Рома с телефона | Tailscale app + Serve URL (owner) **или** Pages + coordinator Bearer (мобильный интернет через Funnel) |
+| ChatGPT / браузер → coordinator | GitHub Pages → `pointer.json` → обычно **IPv4 `*.lhr.life`** (Bearer); Funnel `*.ts.net` — fallback (IPv6 у браузеров часто ломается) |
+| Рома на ноутбуке → owner | `https://roma-gv628rc.tailbfec94.ts.net/login` (Serve) или `http://127.0.0.1:8765/login` |
+| Рома с телефона | Tailscale + Serve (owner) **или** Pages + coordinator Bearer |
 
-Адрес Funnel **стабилен** (hostname ноды). Эфемерные lhr.life/Pinggy больше не нужны как основной транспорт.
-
-Публичный указатель без секретов: `gateway/pointer.json` (Pages отдаёт его рядом со SPA).
+Funnel-hostname стабилен; **lhr.life hostname плавает** — актуальный URL только в опубликованном `pointer.json`.
 
 ## Службы (systemd --user)
 
