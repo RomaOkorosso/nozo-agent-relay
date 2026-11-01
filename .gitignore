@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Runtime data and secrets (never commit)
+data/
+*.sqlite*
+*.db
+*.db-*
+.env
+.env.*
+bootstrap_credentials.json
+artifacts/
+state/
+logs/
+workspaces/
+
+# Test / coverage output
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Secure MCP Tunnel secrets (never commit)
+data/tunnel/

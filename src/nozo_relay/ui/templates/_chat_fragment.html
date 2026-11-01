@@ -1,0 +1,6 @@
+<div class="chat-frag" data-older="{{ chat.older_cursor or '' }}" data-has-more="{{ 1 if chat.has_more else 0 }}">
+<ul>
+{% set project_id = project.id %}
+{% include "_chat_items.html" %}
+</ul>
+</div>

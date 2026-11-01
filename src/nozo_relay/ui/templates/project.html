@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}{{ project.name }} — Nozo Relay{% endblock %}
+{% block bodyattrs %} data-page="project" data-project-id="{{ project.id }}" data-hw="{{ hw }}" data-ws-path="/ws/v1/projects/{{ project.id }}"{% endblock %}
+{% block topbar_extra %}<a class="crumb" href="/projects">← Проекты</a>{% endblock %}
+{% block conn %}{% include "_conn.html" %}{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ project.name }}</h1>
+<div class="layout">
+  <section class="tab-panel is-active" id="tab-tasks" data-tab-panel="tasks" aria-label="Задачи">
+    <div class="region" data-region="summary" data-url="/ui/projects/{{ project.id }}/summary">{% include "_summary.html" %}</div>
+    <h2>Задачи</h2>
+    <div class="region" data-region="tasks" data-url="/ui/projects/{{ project.id }}/tasks">{% include "_tasks.html" %}</div>
+  </section>
+
+  <section class="tab-panel" id="tab-chat" data-tab-panel="chat" aria-label="Чат проекта">
+    <h2>Чат проекта</h2>
+    {% set scope_task_id = '' %}
+    {% include "_chat.html" %}
+  </section>
+
+  <section class="tab-panel" id="tab-manage" data-tab-panel="manage" aria-label="Управление">
+    <h2>Управление</h2>
+    {% if can_create_task %}
+    <details class="fold" id="create-task" open>
+      <summary class="btn btn-secondary">Новая задача</summary>
+      <form class="fold-body" data-kind="task-create" data-project="{{ project.id }}"
+            {% if active_delegation %}data-delegation-id="{{ active_delegation.id }}"{% endif %}
+            autocomplete="off">
+        {% if active_delegation and not is_owner %}
+        <p class="small muted">В пределах делегирования (до {{ active_delegation.valid_until }}). Scope не должен превышать потолок делегирования.</p>
+        {% endif %}
+        <label class="field">Название
+          <input name="title" type="text" required maxlength="200">
+        </label>
+        <label class="field">Требования
+          <textarea name="requirements" rows="4" required maxlength="30000"></textarea>
+        </label>
+        <label class="field">Критерии приёмки (по одному в строке)
+          <textarea name="acceptance" rows="3" required></textarea>
+        </label>
+        <div class="grid2">
+          <label class="field">Исполнитель
+            <select name="implementer_id" required>
+              {% for p in agents.implementers %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="field">Аудитор
+            <select name="auditor_id" required>
+              {% for p in agents.auditors %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="field">Режим
+            <select name="mode"><option value="surgical">Точечный</option><option value="creative">Творческий</option></select>
+          </label>
+          <label class="field">Приоритет
+            <select name="urgency"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="low">Низкий</option></select>
+          </label>
+        </div>
+        <label class="field">Разрешённые пути (scope, по одному в строке)
+          <textarea name="allowed_paths" rows="2" required>{% if active_delegation and active_delegation.scope_ceiling.allowed_paths %}{{ active_delegation.scope_ceiling.allowed_paths | join('\n') }}{% else %}web/**
+docs/**
+tests/**{% endif %}</textarea>
+        </label>
+        <label class="field">Запрещённые пути
+          <textarea name="denied_paths" rows="2">{% if active_delegation and active_delegation.scope_ceiling.get('denied_paths') %}{{ active_delegation.scope_ceiling.denied_paths | join('\n') }}{% else %}.git/**
+.env*
+data/**{% endif %}</textarea>
+        </label>
+        <div class="grid2">
+          <label class="field">Макс. файлов<input name="max_changed_files" type="number" min="1" max="10000" value="{{ active_delegation.scope_ceiling.max_changed_files if active_delegation else 10 }}" inputmode="numeric"></label>
+          <label class="field">Макс. строк diff<input name="max_diff_lines" type="number" min="1" max="1000000" value="{{ active_delegation.scope_ceiling.max_diff_lines if active_delegation else 400 }}" inputmode="numeric"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="autonomous" {% if not active_delegation or active_delegation.scope_ceiling.allow_autonomous %}checked{% endif %}> Автономный режим</label>
+        <label class="check"><input type="checkbox" name="enqueue"> Сразу поставить в очередь</label>
+        <button class="btn btn-primary btn-block" type="submit">Создать задачу</button>
+      </form>
+    </details>
+    {% endif %}
+
+    {% if is_owner %}
+    <h3>Очередь проекта</h3>
+    <div class="btn-row">
+      {% if project.paused %}
+      <button type="button" class="btn btn-secondary" data-act="project-control" data-command="resume" data-project="{{ project.id }}">Продолжить проект</button>
+      {% else %}
+      <button type="button" class="btn btn-secondary" data-act="project-control" data-command="pause" data-project="{{ project.id }}">Пауза проекта</button>
+      {% endif %}
+    </div>
+
+    <details class="fold fold-danger">
+      <summary class="btn btn-danger-outline">Аварийная остановка</summary>
+      <div class="fold-body">
+        <p class="small">Ставит на паузу все проекты и запрашивает остановку всех активных запусков. Сервер ответит «Запрошено»; «Остановлено» появится только после квитанции runner по каждому запуску.</p>
+        <button type="button" class="btn btn-danger btn-block" data-act="emergency-stop">Остановить всё</button>
+      </div>
+    </details>
+    {% elif not can_create_task %}
+    <p class="muted">Нет действующего делегирования для создания задач. Чат доступен на вкладке «Чат».</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block bottomnav %}
+<nav class="bottomnav" aria-label="Разделы">
+  <button type="button" class="tab is-active" data-tab="tasks">Задачи</button>
+  <button type="button" class="tab" data-tab="chat">Чат</button>
+  <button type="button" class="tab" data-tab="manage">Управление</button>
+</nav>
+{% endblock %}

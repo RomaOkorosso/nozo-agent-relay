@@ -1,50 +1,38 @@
-# Отчёт: устойчивый доступ Relay (2026-11-01)
+# Stable Access report (corrected after SA audit) — 2026-11-01
 
-## Итоговая архитектура
+Supersedes earlier optimistic wording. Independent audit: `docs/CODEX_STABLE_ACCESS_AUDIT.md` (FAIL).  
+Fix round: `docs/STABLE_ACCESS_FIX_REPORT.md`.
 
-Основной транспорт: **Tailscale Funnel** на стабильном `https://roma-gv628rc.tailbfec94.ts.net` → `127.0.0.1:8765`.  
-GitHub Pages SPA читает `gateway/pointer.json` и ходит в Relay с coordinator Bearer + CORS `.github.io`.  
-Owner: loopback HTML login и/или Serve в tailnet. Cookie `Secure` выбирается **per-request**.
+## Architecture
 
-## Изменённые / добавленные файлы
-
-- `src/nozo_relay/api/deps.py` — same-origin Origin fallback  
-- `src/nozo_relay/api/auth_routes.py` — `cookie_secure_for_request`  
-- `src/nozo_relay/ui/routes.py` — передача `request` в cookies; UX forbidden  
-- `src/nozo_relay/api/cors.py` — OPTIONS без 405 для чужих Origin  
-- `scripts/run_relay_stable.sh`, `ensure_tailscale_surface.sh`, `nozo_watchdog.sh`  
-- systemd user: `~/.config/systemd/user/nozo-*.service` / `.timer`  
-- `gateway/{app.js,index.html,app.css,pointer.json}` — состояния, pointer, drafts, msg idempotency  
-- `tests/test_origin_login_cookies.py`, `tests/test_gateway_pointer.py`  
-- `docs/OPERATOR_STABLE_ACCESS.md`, этот отчёт  
-- `evidence/stable-access-2026-11-01/matrix.jsonl`
-
-## Ветка / коммиты
-
-Gateway-часть публикуется в `master` (Pages). Полное дерево `src/` исторически было незакоммичено в remote — рабочие файлы на диске; gateway commits отдельно.
-
-## Локальная матрица (выполнено)
-
-| Кейс | Результат |
+| Path | Role |
 |---|---|
-| Local owner login + Origin | 303 + session cookie, без Origin-ошибки |
-| Local /projects | 200 |
-| Funnel coordinator /me + ACAO github.io | 200 |
-| Idempotent message (double POST) | одна запись |
-| Owner на «голом» Funnel Host | 403 |
-| CORS evil Origin | без ACAO |
-| Bad token | 401 |
-| JSON health не HTML | ok |
-| Restart Relay | local ready + public live, сообщения на месте |
-| Coordinator GET /agents | 403 |
+| `https://roma-gv628rc.tailbfec94.ts.net` via **Tailscale Funnel** (public IP + SNI) | Coordinator HTTP/API only; **no WebSocket** |
+| Same hostname via **Tailscale Serve** (tailnet identity headers) | Full owner/coordinator UI in tailnet |
+| `http://127.0.0.1:8765` | Loopback owner/dev |
+| GitHub Pages SPA | Static UI; Bearer to Relay; reads `pointer.json` |
 
-## Не завершено без Ромы / ChatGPT
+**Offline laptop:** static Pages remain reachable; Relay API / Funnel operations do not.  
+**pointer.json:** written locally by `ensure_tailscale_surface.sh`; **published Pages update requires commit/push** (not automatic recovery).
 
-- Реальный вход ChatGPT cloud browser на Pages (сценарий 1) — **нужно подтверждение**  
-- Реальный телефон (сценарий 3) — **нужно подтверждение**  
-- Полная перезагрузка ноутбука с linger — **не прогонялась** (Linger=no)  
-- Сворачивание мобильного браузера — зависит от телефона  
+## Acceptance checks (separated routes)
 
-## Ограничения бесплатного транспорта
+| Case | Route | Expected | Result (fix round) |
+|---|---|---|---|
+| Local owner HTML login + Origin | loopback | 303 + cookie | PASS (tests + curl) |
+| Owner login on public Host without Tailscale identity | loopback Host spoof / public | 403, no cookie | PASS (TestClient + fixture) |
+| Owner login via private Serve hostname from laptop | private DNS→100.x | may 303 (tailnet) | Not a public Funnel proof |
+| Coordinator `/me` + CORS github.io | public IP+SNI | 200 + ACAO | PASS |
+| Auditor `/me` on Funnel | public IP+SNI | 403 | PASS |
+| Auditor WebSocket on Funnel | public IP+SNI | handshake reject | PASS (`public-ws-reprobe.json` 403) |
+| Idempotent message | public/local | same id | PASS |
+| Watchdog Serve-only | disposable PATH stubs | calls `funnel --bg` | PASS |
+| HTML health not public_ok | stubs | no public_ok | PASS |
+| Funnel apply failure exit≠0 | stubs | nonzero | PASS |
+| Gateway startup dead saved→pointer | Playwright mock | connects to NEW | PASS |
+| Rejected message discard | Playwright | pending cleared | PASS |
+| Origin:null login | API | 403 by default | PASS |
 
-См. `OPERATOR_STABLE_ACCESS.md`. Ноутбук offline = сервис offline. Funnel бесплатен в рамках личного Tailscale; платные API/туннели не подключались.
+## SameSite Lax note
+
+Session cookies use `SameSite=Lax` (not Strict) so top-level HTML form login redirects and claim-GET recovery keep the session through reverse proxies. Mutations still require CSRF + Origin allowlist. This is an intentional deviation from a Strict-only reading of design 05_SECURITY; documented here rather than treated as a silent refactor.

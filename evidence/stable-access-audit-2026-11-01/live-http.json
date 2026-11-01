@@ -1,0 +1,47 @@
+[
+  {
+    "url": "http://127.0.0.1:8765/api/v1/health/ready",
+    "status": 200,
+    "content_type": "application/json",
+    "bytes": 47,
+    "body": {
+      "status": "ready",
+      "db": "ok",
+      "schema_version": 5
+    }
+  },
+  {
+    "url": "https://roma-gv628rc.tailbfec94.ts.net/api/v1/health/live",
+    "status": 200,
+    "content_type": "application/json",
+    "bytes": 17,
+    "body": {
+      "status": "live"
+    }
+  },
+  {
+    "url": "https://romaokorosso.github.io/nozo-agent-relay/pointer.json",
+    "status": 200,
+    "content_type": "application/json; charset=utf-8",
+    "bytes": 237
+  },
+  {
+    "url": "https://romaokorosso.github.io/nozo-agent-relay/app.js",
+    "status": 200,
+    "content_type": "application/javascript; charset=utf-8",
+    "bytes": 26602
+  },
+  {
+    "url": "https://dns.google/resolve?name=roma-gv628rc.tailbfec94.ts.net&type=A",
+    "status": 200,
+    "content_type": "application/json; charset=UTF-8",
+    "bytes": 437
+  },
+  {
+    "local_dns": [
+      "100.108.253.65",
+      "100.108.253.65",
+      "100.108.253.65"
+    ]
+  }
+]

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Ошибка {{ status }} — Nozo Relay{% endblock %}
+{% block header %}<header class="topbar"><a class="brand" href="/projects">Nozo Relay</a></header>{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>{{ status }}</h1>
+  <p>{{ message }}</p>
+  <p><a class="btn btn-primary" href="/projects">К проектам</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход — Nozo Relay{% endblock %}
+{% block bodyattrs %} data-page="login"{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<section class="card login-card">
+  <h1>Nozo Relay</h1>
+  <p class="muted">Вход в Nozo Relay (владелец или координатор). Сессия — Secure/HttpOnly cookie.</p>
+  {# Classic form POST — ChatGPT remote browser often fails on JS fetch through free tunnels. #}
+  <form id="login-form" method="post" action="/login" autocomplete="on">
+    <label class="field">Логин
+      <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="64" value="{{ username or '' }}">
+    </label>
+    <label class="field">Пароль
+      <input name="password" type="password" autocomplete="current-password" required maxlength="1024">
+    </label>
+    <button class="btn btn-primary btn-block" type="submit">Войти</button>
+    <p id="login-error" class="form-error" role="alert" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
+  </form>
+</section>
+{% endblock %}

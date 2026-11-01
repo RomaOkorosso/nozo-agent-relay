@@ -1,0 +1,91 @@
+No entry for terminal type "dumb";
+using dumb terminal settings.
+FFF.FF                                                                   [100%]
+=================================== FAILURES ===================================
+___________________ test_watchdog_repairs_serve_only_surface ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-roma/pytest-6/test_watchdog_repairs_serve_on0')
+
+    def test_watchdog_repairs_serve_only_surface(tmp_path):
+        env,log=binaries(tmp_path,status=f'https://{HOST} (tailnet only)\n|-- / proxy http://127.0.0.1:8765')
+        p=subprocess.run(['bash',str(ROOT/'scripts/nozo_watchdog.sh')],env=env,capture_output=True,text=True,timeout=10)
+        calls=log.read_text()
+>       assert 'funnel --bg' in calls,f'Funnel disabled, watchdog never repaired it: exit={p.returncode}, calls={calls!r}, out={p.stdout!r}'
+E       AssertionError: Funnel disabled, watchdog never repaired it: exit=0, calls='tailscale funnel status\n', out='2026-11-01T14:48:39+04:00 public_ok\n'
+E       assert 'funnel --bg' in 'tailscale funnel status\n'
+
+tests/test_stable_independent.py:31: AssertionError
+________________ test_watchdog_does_not_accept_html_with_brace _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-roma/pytest-6/test_watchdog_does_not_accept_0')
+
+    def test_watchdog_does_not_accept_html_with_brace(tmp_path):
+        env,log=binaries(tmp_path,status=f'https://{HOST} (Funnel on)',public_body='<html><script>const x={};</script>proxy error</html>')
+        p=subprocess.run(['bash',str(ROOT/'scripts/nozo_watchdog.sh')],env=env,capture_output=True,text=True,timeout=10)
+>       assert 'public_ok' not in p.stdout,f'HTML classified as JSON health: {p.stdout.strip()}'
+E       AssertionError: HTML classified as JSON health: 2026-11-01T14:48:39+04:00 public_ok
+E       assert 'public_ok' not in '2026-11-01T... public_ok\n'
+E         
+E         'public_ok' is contained here:
+E           2026-11-01T14:48:39+04:00 public_ok
+E         ?                           +++++++++
+
+tests/test_stable_independent.py:36: AssertionError
+_________________ test_surface_refresh_failure_is_not_success __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-roma/pytest-6/test_surface_refresh_failure_i0')
+
+    def test_surface_refresh_failure_is_not_success(tmp_path):
+        env,log=binaries(tmp_path,status=f'https://{HOST} (Funnel on)',refresh_exit=1)
+        p=subprocess.run(['bash',str(ROOT/'scripts/ensure_tailscale_surface.sh')],env=env,capture_output=True,text=True,timeout=10)
+>       assert p.returncode!=0,f'failed tailscale --bg swallowed: exit 0; {p.stdout.strip()}'
+E       AssertionError: failed tailscale --bg swallowed: exit 0; wrote /tmp/pytest-of-roma/pytest-6/test_surface_refresh_failure_i0/pointer/pointer.json -> https://roma-gv628rc.tailbfec94.ts.net
+E         SERVE_FUNNEL=https://roma-gv628rc.tailbfec94.ts.net
+E         https://roma-gv628rc.tailbfec94.ts.net (Funnel on)
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['bash', '/tmp/nozo-stable-audit-ozjmwsl2/repo/scripts/ensure_tailscale_surface.sh'], returncode...nSERVE_FUNNEL=https://roma-gv628rc.tailbfec94.ts.net\nhttps://roma-gv628rc.tailbfec94.ts.net (Funnel on)\n', stderr='').returncode
+
+tests/test_stable_independent.py:41: AssertionError
+____________ test_null_origin_does_not_bypass_login_origin_boundary ____________
+
+env = Env(settings=Settings(data_dir=PosixPath('/tmp/pytest-of-roma/pytest-6/test_null_origin_does_not_bypa0/data'), sqlite_... 'principal_id': 'b9c666e0-a281-4070-a941-822cf58e4ce3'}}, app=<fastapi.applications.FastAPI object at 0x798b98607cb0>)
+
+    def test_null_origin_does_not_bypass_login_origin_boundary(env):
+        from conftest import OWNER_PASSWORD
+        with env.client() as c:
+            r=c.post('/api/v1/auth/login',json={'username':'owner','password':OWNER_PASSWORD},headers={'Origin':'null'})
+>           assert r.status_code==403,f'opaque origin accepted, session minted: {r.status_code}'
+E           AssertionError: opaque origin accepted, session minted: 200
+E           assert 200 == 403
+E            +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_stable_independent.py:60: AssertionError
+_________________ test_public_surface_denies_auditor_websocket _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-roma/pytest-6/test_public_surface_denies_aud0')
+
+    def test_public_surface_denies_auditor_websocket(tmp_path):
+        from conftest import OWNER_PASSWORD,make_settings
+        from nozo_relay.bootstrap import bootstrap,credentials_path
+        from nozo_relay.main import create_app
+        from fastapi.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+        settings=make_settings(tmp_path,external_public_hosts=[HOST],allowed_hosts=[HOST])
+        bootstrap(settings,owner_password=OWNER_PASSWORD)
+        creds=json.loads(credentials_path(settings).read_text())
+        auditor=next(a for a in creds['agents'] if a['name']=='test-auditor')
+        app=create_app(settings)
+        with TestClient(app,base_url='https://'+HOST) as c:
+            assert c.get('/api/v1/me',headers={'Authorization':'Bearer '+auditor['key']}).status_code==403
+>           with pytest.raises(WebSocketDisconnect):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE WebSocketDisconnect
+
+tests/test_stable_independent.py:75: Failed
+=========================== short test summary info ============================
+FAILED tests/test_stable_independent.py::test_watchdog_repairs_serve_only_surface
+FAILED tests/test_stable_independent.py::test_watchdog_does_not_accept_html_with_brace
+FAILED tests/test_stable_independent.py::test_surface_refresh_failure_is_not_success
+FAILED tests/test_stable_independent.py::test_null_origin_does_not_bypass_login_origin_boundary
+FAILED tests/test_stable_independent.py::test_public_surface_denies_auditor_websocket
+5 failed, 1 passed in 1.41s

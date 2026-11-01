@@ -1,0 +1,27 @@
+{% from "_macros.html" import chip, time, activity, control_row %}
+{% set t = card %}
+<div class="task-state" data-task-version="{{ t.version }}" data-task-status="{{ t.status }}" data-hw="{{ hw }}">
+  <div class="row-between">
+    <h2 class="task-title">{{ t.title }}</h2>
+    {{ chip(t.tone, t.status_ru) }}
+  </div>
+  {% if t.blocked_ru %}<p class="banner banner-danger" data-blocked="{{ t.blocked_reason }}">Причина блокировки: {{ t.blocked_ru }}</p>{% endif %}
+  {{ activity(t.activity) }}
+  {% if controls %}
+  <h3>Команды</h3>
+  <ul class="controls">
+    {% for c in controls %}{{ control_row(c) }}{% endfor %}
+  </ul>
+  {% endif %}
+  <dl class="facts">
+    <dt>Исполнитель</dt><dd>{{ t.implementer }}</dd>
+    <dt>Аудитор</dt><dd>{{ t.auditor }}</dd>
+    <dt>Приоритет / уровень</dt><dd>{{ t.urgency_ru }} / {{ t.tier }}</dd>
+    <dt>Режим</dt><dd>{{ mode_ru }}{% if revision.autonomous %}, автономно{% endif %}</dd>
+    <dt>Ревизия / версия</dt><dd>{{ t.revision }} / v{{ t.version }}</dd>
+    <dt>Неудачные аудиты</dt><dd>{{ t.failed_reviews }}</dd>
+    <dt>Снимок (snapshot)</dt><dd>{% if snapshot %}<code>{{ snapshot.head }}</code> · tree <code>{{ snapshot.tree }}</code>{% if snapshot.verified_at %} · проверен{% else %} · не проверен{% endif %}{% else %}—{% endif %}</dd>
+    <dt>Создана</dt><dd>{{ time(created_at) }}</dd>
+    <dt>Активность</dt><dd>{{ time(t.updated_at) }}</dd>
+  </dl>
+</div>

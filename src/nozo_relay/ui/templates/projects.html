@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Проекты — Nozo Relay{% endblock %}
+{% block bodyattrs %} data-page="projects"{% endblock %}
+{% block content %}
+<h1>Проекты</h1>
+{% if not items %}<p class="muted">Нет доступных проектов.</p>{% endif %}
+<ul class="cards">
+{% for it in items %}
+  <li class="card">
+    <a class="card-link" href="/projects/{{ it.project.id }}">
+      <span class="card-title">{{ it.project.name }}</span>
+      <span class="muted">{{ it.project.slug }}</span>
+      {% if it.project.paused %}<span class="chip chip-warn">Проект на паузе</span>{% endif %}
+      <span class="counters-inline">
+        <span>В очереди: {{ it.counters.queued }}</span>
+        <span>В работе: {{ it.counters.active }}</span>
+        <span>Внимание: {{ it.counters.attention }}</span>
+      </span>
+    </a>
+  </li>
+{% endfor %}
+</ul>
+{% endblock %}

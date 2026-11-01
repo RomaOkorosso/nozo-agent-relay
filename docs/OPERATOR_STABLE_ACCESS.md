@@ -43,11 +43,13 @@ tailscale funnel --https=443 off   # снять публичный Funnel
 
 ## Ограничения (честно)
 
-- Ноутбук выключен / нет интернета → Pages и Funnel недоступны.
-- Funnel публично открывает **только coordinator-поверхность** (owner login с «голого» интернета запрещён).
+- Ноутбук выключен / нет интернета → **Relay API и Funnel недоступны**; статическая GitHub Pages страница при этом может открываться, но операции к Relay не работают.
+- Funnel публично открывает **только coordinator HTTP/API** (без WebSocket; owner login с «голого» интернета запрещён).
 - С телефона owner-панель требует Tailscale на телефоне; без него — только Pages как coordinator.
+- `gateway/pointer.json` обновляется локально скриптом surface; **публикация на Pages — отдельный commit/push**, не авто-recovery.
 - OpenAI Platform MCP Tunnel / платные туннели **не** используются в этом профиле.
-- Смена hostname Tailscale (редко) → обновить `NOZO_RELAY_PUBLIC_HOST`, перезапустить surface, закоммитить новый `pointer.json`.
+- Смена hostname Tailscale (редко) → обновить `NOZO_RELAY_PUBLIC_HOST`, перезапустить surface, закоммитить и запушить новый `pointer.json`.
+- Origin:null (Cursor Simple Browser) по умолчанию **отклонён**; используйте обычный браузер или (только loopback) `NOZO_RELAY_ALLOW_OPAQUE_ORIGIN=1`.
 
 ## Проверки состояния
 

@@ -1,0 +1,56 @@
+{# Chat panel: filters + list + composer. Params: chat, project, task (optional), scope_task_id #}
+{% set project_id = project.id %}
+<section class="panel chat" id="chat" data-chat
+         data-url="/ui/projects/{{ project.id }}/chat"
+         data-task-id="{{ scope_task_id or '' }}"
+         data-older="{{ chat.older_cursor or '' }}">
+  <div class="chat-tools">
+    <label class="field field-inline">Автор
+      <select data-chat-filter="author_id">
+        <option value="">Все</option>
+        {% for p in chat.people.values() %}<option value="{{ p.id }}">{{ p.name }} ({{ p.kind_ru }})</option>{% endfor %}
+      </select>
+    </label>
+    {% if not scope_task_id %}
+    <label class="field field-inline">Задача
+      <select data-chat-filter="task_id">
+        <option value="">Все</option>
+        {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+  <button type="button" class="btn btn-secondary btn-block" data-act="older" {% if not chat.has_more %}hidden{% endif %}>Показать более ранние</button>
+  <div class="chat-scroll" data-chat-scroll>
+    <ul class="chat-list" data-live-list>
+{% include "_chat_items.html" %}
+    </ul>
+    <p class="muted empty" data-chat-empty {% if chat.messages %}hidden{% endif %}>Сообщений пока нет.</p>
+  </div>
+  {% if can_post_chat %}
+  <form class="composer" data-kind="message" data-project="{{ project.id }}" data-task="{{ scope_task_id or '' }}" autocomplete="off">
+    <div class="reply-bar" data-reply-bar hidden>
+      <span>Ответ: <b data-reply-author></b> — <span data-reply-snippet></span></span>
+      <button type="button" class="btn btn-ghost btn-small" data-act="cancel-reply">✕</button>
+    </div>
+    {% if not scope_task_id %}
+    <label class="field">Связать с задачей (необязательно)
+      <select name="task_id">
+        <option value="">— проект —</option>
+        {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="field">Сообщение
+      <textarea name="body" rows="3" maxlength="8000" required placeholder="Уточнение для агентов. Сообщение не меняет scope, не даёт approval и не запускает агента."></textarea>
+    </label>
+    <div class="row-between">
+      <select name="kind" aria-label="Тип сообщения">
+        <option value="note">Заметка</option>
+        <option value="question">Вопрос</option>
+      </select>
+      <button class="btn btn-primary" type="submit">Отправить</button>
+    </div>
+  </form>
+  {% endif %}
+</section>

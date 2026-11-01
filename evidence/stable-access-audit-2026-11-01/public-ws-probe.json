@@ -1,0 +1,7 @@
+{
+  "public_ip": "176.58.88.82",
+  "handshake": 101,
+  "credential_kind": "auditor",
+  "frame_type": "delegation.created",
+  "frame_has_project_data": true
+}

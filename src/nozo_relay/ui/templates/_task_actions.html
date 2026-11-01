@@ -1,0 +1,45 @@
+{# Task controls. Owner: full. Coordinator: only tasks they originated, within delegation (server enforces). #}
+<div class="actions" data-task-version="{{ card.version }}" data-task-status="{{ card.status }}">
+{% if not can_drive %}
+  <p class="muted">Управление этой задачей вам недоступно.</p>
+{% elif actions.stopping %}
+  <p class="banner banner-warn">Идёт остановка: ожидаем квитанцию runner. Отмена — единственная доступная эскалация.</p>
+{% endif %}
+{% if can_drive %}
+  <div class="btn-row">
+    {% if actions.enqueue %}<button type="button" class="btn btn-primary" data-act="enqueue">В очередь</button>{% endif %}
+    {% if actions.pause %}<button type="button" class="btn btn-secondary" data-act="control" data-command="pause">Пауза</button>{% endif %}
+    {% if actions.resume %}<button type="button" class="btn btn-secondary" data-act="control" data-command="resume">Продолжить</button>{% endif %}
+  </div>
+  {% if is_owner and actions.reassign %}
+  <details class="fold">
+    <summary class="btn btn-secondary">Переназначить</summary>
+    <div class="fold-body">
+      <label class="field">Исполнитель
+        <select name="implementer_id" data-reassign>
+          <option value="">— не менять —</option>
+          {% for p in agents.implementers %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">Аудитор
+        <select name="auditor_id" data-reassign>
+          <option value="">— не менять —</option>
+          {% for p in agents.auditors %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <p class="small muted">Если задача выполняется, сначала будет остановлен текущий запуск (202 «Запрошено»), затем применено переназначение.</p>
+      <button type="button" class="btn btn-primary" data-act="control" data-command="reassign">Переназначить</button>
+    </div>
+  </details>
+  {% endif %}
+  {% if actions.cancel %}
+  <details class="fold fold-danger">
+    <summary class="btn btn-danger-outline">Отменить задачу</summary>
+    <div class="fold-body">
+      <p class="small">Последствия: текущий запуск будет остановлен, задача станет «Отменена» и не может быть продолжена. Остановка запущенного процесса считается выполненной только после квитанции runner.</p>
+      <button type="button" class="btn btn-danger" data-act="control" data-command="cancel">Подтвердить отмену</button>
+    </div>
+  </details>
+  {% endif %}
+{% endif %}
+</div>

@@ -1,0 +1,25 @@
+No entry for terminal type "dumb";
+using dumb terminal settings.
+........................................................................ [ 14%]
+........................................................................ [ 29%]
+........................................................................ [ 43%]
+........................................................................ [ 58%]
+.....................................................................s.. [ 73%]
+............................ss.......................................... [ 87%]
+........s...................................................             [100%]
+=============================== warnings summary ===============================
+tests/test_t10_mcp.py::test_missing_wrong_malformed_and_misplaced_tokens_are_denied
+tests/test_t10_mcp.py::test_owner_browser_session_cannot_use_mcp
+  /home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay/.venv/lib/python3.14/site-packages/httpx2/_client.py:2041: DeprecationWarning: Setting per-request cookies=<...> is being deprecated, because the expected behaviour on cookie persistence is ambiguous. Set cookies directly on the client instance instead.
+    return await self.request(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_gateway_previous_regression.py:8: could not import 'playwright.sync_api': No module named 'playwright'
+SKIPPED [1] tests/test_stable_browser_independent.py:6: could not import 'playwright.sync_api': No module named 'playwright'
+SKIPPED [1] tests/test_t04_browser_smoke.py:21: could not import 'playwright.sync_api': No module named 'playwright'
+SKIPPED [1] tests/test_t08_cursor_adapter.py:451: real Cursor run is opt-in: set NOZO_RUN_REAL_CLI=1 (consumes Cursor quota)
+SKIPPED [1] tests/test_t09_codex_adapter.py:574: real Codex runs are opt-in: set NOZO_RUN_REAL_CLI=1 (consumes ChatGPT-plan quota; billing/overage unknown)
+SKIPPED [1] tests/test_t09_codex_adapter.py:600: real Codex runs are opt-in: set NOZO_RUN_REAL_CLI=1 (consumes ChatGPT-plan quota; billing/overage unknown)
+SKIPPED [1] tests/test_t11_phone_regression.py:328: tailscale is now installed: re-probe and refresh evidence/t11/PHONE_UI.json (still no real-device test => still BLOCKED_EXTERNAL)
+488 passed, 7 skipped, 2 warnings in 196.48s (0:03:16)

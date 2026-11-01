@@ -1,0 +1,42 @@
+[
+  {
+    "case": "health",
+    "public_ip": "176.58.88.82",
+    "status": 200,
+    "content_type": "application/json",
+    "acao": null,
+    "body": "{\"status\":\"live\"}"
+  },
+  {
+    "case": "agents_public",
+    "public_ip": "176.58.88.82",
+    "status": 404,
+    "content_type": "application/json",
+    "acao": null,
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Not Found\",\"request_id\":null,\"retryable\":false,\"details\":null}}"
+  },
+  {
+    "case": "forged_identity",
+    "public_ip": "176.58.88.82",
+    "status": 404,
+    "content_type": "application/json",
+    "acao": null,
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Not Found\",\"request_id\":null,\"retryable\":false,\"details\":null}}"
+  },
+  {
+    "case": "auditor_denied_public",
+    "public_ip": "176.58.88.82",
+    "status": 403,
+    "content_type": "application/json",
+    "acao": "https://romaokorosso.github.io",
+    "body": "{\"error\":{\"code\":\"forbidden\",\"message\":\"Only coordinator credentials are allowed on the public surface\",\"request_id\":\"9c836697-4231-46e9-ba9f-1fba7bcc5e6d\",\"retryable\":false,\"details\":null}}"
+  },
+  {
+    "case": "preflight",
+    "public_ip": "176.58.88.82",
+    "status": 204,
+    "content_type": null,
+    "acao": "https://romaokorosso.github.io",
+    "body": ""
+  }
+]

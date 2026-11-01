@@ -1,0 +1,32 @@
+{% from "_macros.html" import chip, time %}
+<div class="reports" data-hw="{{ hw }}">
+{% for r in reports %}
+  <details class="card report" id="report-{{ r.id }}" data-report-id="{{ r.id }}">
+    <summary>
+      <span class="card-title">{{ r.kind_ru }} · ревизия {{ r.revision }}</span>
+      {% if r.verdict %}{{ chip(r.verdict_tone, r.verdict_ru) }}{% endif %}
+      <span class="small muted">{{ time(r.created_ms) }}</span>
+    </summary>
+    <div class="report-body">
+      <p class="msg-body">{{ r.summary }}</p>
+      {% if r.evidence_level %}<p class="small">Уровень доказательств: <code>{{ r.evidence_level }}</code></p>{% endif %}
+      {% if r.snapshot %}<p class="small">Снимок: tree <code>{{ r.snapshot.tree_hash[:12] }}</code>, diff <code>{{ r.snapshot.diff_hash[:12] }}</code>{% if r.snapshot.verified_at %} · проверен{% endif %}</p>{% endif %}
+      {% for g in r.check_groups %}
+      <h4>{{ chip(g.tone, g.label) }} <span class="muted small">({{ g.rows|length }})</span></h4>
+      <ul class="checks">
+        {% for c in g.rows %}<li data-check-status="{{ c.status }}"><code>{{ c.command_label or c.id }}</code>{% if c.observed %} — {{ c.observed }}{% endif %}</li>{% endfor %}
+      </ul>
+      {% endfor %}
+      {% if r.findings %}
+      <h4>Замечания</h4>
+      <ul class="findings">
+        {% for f in r.findings %}<li><b>{{ f.severity }}</b> · {{ f.component }} · {{ f.invariant_key }} · {{ f.status }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if r.blockers %}<div class="small banner banner-warn">Блокеры:<ul>{% for b in r.blockers %}<li>{{ b }}</li>{% endfor %}</ul></div>{% endif %}
+    </div>
+  </details>
+{% else %}
+  <p class="muted empty">Отчётов пока нет.</p>
+{% endfor %}
+</div>

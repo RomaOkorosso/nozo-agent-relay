@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Idempotent: Tailscale Funnel (public coordinator HTTPS) + Serve on same Host.
 # Stable public URL: https://$HOST — no ephemeral free-tunnel hostname.
+# Fail closed: nonzero exit if Funnel apply/verify fails (SA-04). Do not write pointer on failure.
 set -euo pipefail
 HOST="${NOZO_RELAY_PUBLIC_HOST:-roma-gv628rc.tailbfec94.ts.net}"
 PORT="${NOZO_RELAY_PORT:-8765}"
@@ -16,13 +17,22 @@ if ! tailscale status >/dev/null 2>&1; then
   exit 1
 fi
 
-# Modern CLI: funnel --bg <port> enables HTTPS:443 proxy + AllowFunnel.
-# (Older docs used `funnel --bg on` after serve; that now mis-parses as target "on".)
-if ! tailscale funnel status 2>/dev/null | grep -q 'Funnel on'; then
-  tailscale funnel --bg "${PORT}"
-else
-  # Refresh proxy target if needed (idempotent).
-  tailscale funnel --bg "${PORT}" >/dev/null 2>&1 || true
+# Always apply; never swallow failure (SA-04).
+if ! tailscale funnel --bg "${PORT}"; then
+  echo "tailscale funnel --bg ${PORT} failed" >&2
+  exit 1
+fi
+
+status="$(tailscale funnel status 2>&1 || true)"
+if ! grep -q 'Funnel on' <<<"$status"; then
+  echo "Funnel not enabled after apply:" >&2
+  echo "$status" >&2
+  exit 1
+fi
+if ! grep -Eq "127\\.0\\.0\\.1:${PORT}|localhost:${PORT}" <<<"$status"; then
+  echo "Funnel proxy target is not 127.0.0.1:${PORT}:" >&2
+  echo "$status" >&2
+  exit 1
 fi
 
 desired="https://${HOST}"
@@ -40,7 +50,7 @@ doc = {
   "relay_base": ${desired@Q},
   "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
   "transport": "tailscale_funnel",
-  "note": "Public coordinator HTTPS via Tailscale Funnel. No keys. Gateway may auto-fill this URL.",
+  "note": "Public coordinator HTTPS via Tailscale Funnel. No keys. Local file; Pages needs commit/push to publish.",
 }
 open(path, "w", encoding="utf-8").write(json.dumps(doc, indent=2) + "\n")
 print("wrote", path, "->", doc["relay_base"])
@@ -50,4 +60,4 @@ else
 fi
 
 echo "SERVE_FUNNEL=https://${HOST}"
-tailscale funnel status 2>&1 | head -20 || true
+echo "$status" | head -20

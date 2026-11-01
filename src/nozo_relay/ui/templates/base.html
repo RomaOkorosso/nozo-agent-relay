@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>{% block title %}Nozo Relay{% endblock %}</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body data-csrf-cookie="{{ csrf_cookie }}" data-csrf-header="{{ csrf_header }}"{% block bodyattrs %}{% endblock %}>
+<noscript><p class="banner banner-danger">Для панели нужен JavaScript (обновления в реальном времени и отправка команд).</p></noscript>
+{% block header %}
+<header class="topbar">
+  <a class="brand" href="/projects">Nozo Relay</a>
+  {% block topbar_extra %}{% endblock %}
+  {% if principal %}
+  <button type="button" class="btn btn-ghost" data-act="logout" title="Выйти">Выйти</button>
+  {% endif %}
+</header>
+{% endblock %}
+{% block conn %}{% endblock %}
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+{% block bottomnav %}{% endblock %}
+</body>
+</html>

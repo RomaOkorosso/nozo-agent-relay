@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }} — Nozo Relay{% endblock %}
+{% block bodyattrs %} data-page="task" data-project-id="{{ project.id }}" data-task-id="{{ task.id }}" data-hw="{{ hw }}" data-ws-path="/ws/v1/projects/{{ project.id }}"{% endblock %}
+{% block topbar_extra %}<a class="crumb" href="/projects/{{ project.id }}">← {{ project.name }}</a>{% endblock %}
+{% block conn %}{% include "_conn.html" %}{% endblock %}
+{% block content %}
+<div class="layout">
+  <section class="tab-panel is-active" data-tab-panel="state" aria-label="Состояние">
+    <div class="region" data-region="state" data-url="/ui/projects/{{ project.id }}/tasks/{{ task.id }}/state">{% include "_task_state.html" %}</div>
+
+    <h2>Действия</h2>
+    {% if can_drive %}
+    <label class="field">Причина (необязательно)
+      <input id="reason" type="text" maxlength="500" placeholder="Например: уточнить требования">
+    </label>
+    {% endif %}
+    <div class="region" data-region="actions" data-url="/ui/projects/{{ project.id }}/tasks/{{ task.id }}/actions" data-skip-busy="1">{% include "_task_actions.html" %}</div>
+
+    <h2>Требования</h2>
+    <section class="card">
+      <div class="msg-body">{{ revision.requirements }}</div>
+      <h4>Критерии приёмки</h4>
+      <ul>{% for a in revision.acceptance %}<li>{{ a }}</li>{% endfor %}</ul>
+      <h4>Scope</h4>
+      <ul class="small">
+        <li>Разрешено: {{ revision.scope.allowed_paths|join(', ') }}</li>
+        {% if revision.scope.denied_paths %}<li>Запрещено: {{ revision.scope.denied_paths|join(', ') }}</li>{% endif %}
+        <li>Файлов ≤ {{ revision.scope.max_changed_files }}, строк diff ≤ {{ revision.scope.max_diff_lines }}{% if not revision.scope.allow_new_dependencies %}, без новых зависимостей{% endif %}</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="tab-panel" data-tab-panel="chat" aria-label="Чат задачи">
+    <h2>Чат задачи</h2>
+    {% set scope_task_id = task.id %}
+    {% set tasks = [] %}
+    {% include "_chat.html" %}
+  </section>
+
+  <section class="tab-panel" data-tab-panel="reports" aria-label="Отчёты">
+    <h2>Отчёты</h2>
+    <div class="region" data-region="reports" data-url="/ui/projects/{{ project.id }}/tasks/{{ task.id }}/reports" data-skip-busy="1">{% include "_reports.html" %}</div>
+  </section>
+
+  <section class="tab-panel" data-tab-panel="timeline" aria-label="Лента событий">
+    <h2>Лента событий</h2>
+    <div class="region" data-region="timeline" data-url="/ui/projects/{{ project.id }}/tasks/{{ task.id }}/timeline">{% include "_timeline.html" %}</div>
+  </section>
+</div>
+{% endblock %}
+{% block bottomnav %}
+<nav class="bottomnav" aria-label="Разделы">
+  <button type="button" class="tab is-active" data-tab="state">Задача</button>
+  <button type="button" class="tab" data-tab="chat">Чат</button>
+  <button type="button" class="tab" data-tab="reports">Отчёты</button>
+  <button type="button" class="tab" data-tab="timeline">Лента</button>
+</nav>
+{% endblock %}

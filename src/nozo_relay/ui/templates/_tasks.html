@@ -1,0 +1,6 @@
+{% from "_macros.html" import task_card %}
+<ul class="cards task-list" data-hw="{{ hw }}">
+{% for t in tasks %}{{ task_card(t, project.id) }}
+{% else %}<li class="muted empty">Задач пока нет. Создайте первую во вкладке «Управление».</li>
+{% endfor %}
+</ul>

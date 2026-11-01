@@ -1,0 +1,72 @@
+{% macro time(ms) -%}
+<time class="t" datetime="{{ ms|iso }}" title="{{ ms|utc }}">{{ ms|utc }}</time>
+{%- endmacro %}
+
+{% macro chip(tone, text) -%}
+<span class="chip chip-{{ tone }}">{{ text }}</span>
+{%- endmacro %}
+
+{% macro control_row(c, show_task=False) %}
+<li class="control control-{{ c.view.state }}" data-control-id="{{ c.id }}" data-control-state="{{ c.view.state }}">
+  <div class="row-between">
+    {{ chip(c.view.tone, c.view.label) }}
+    <span class="muted small">{{ time(c.requested_at_ms) }}</span>
+  </div>
+  <div class="small">{{ c.view.detail }}</div>
+  {% if show_task and c.task_title %}<div class="small muted">Задача: {{ c.task_title }}</div>{% endif %}
+  {% if c.reason %}<div class="small muted">Причина: {{ c.reason }}</div>{% endif %}
+</li>
+{% endmacro %}
+
+{% macro activity(a) %}
+<div class="activity activity-{{ a.state }}" data-activity="{{ a.state }}">
+  <div class="activity-head">{{ chip(a.tone, a.headline) }}</div>
+  {% if a.signals %}
+  <ul class="signals">
+    {% for s in a.signals %}
+    <li class="signal {{ 'on' if s.ok else 'off' }}" data-signal="{{ s.key }}">
+      <span class="signal-dot" aria-hidden="true"></span>
+      <span class="signal-label">{{ s.label }}</span>
+      <span class="signal-value">{{ s.value }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro task_card(t, project_id) %}
+<li class="card task" data-task-id="{{ t.id }}" data-status="{{ t.status }}" data-version="{{ t.version }}">
+  <a class="card-link" href="/projects/{{ project_id }}/tasks/{{ t.id }}">
+    <span class="row-between">
+      <span class="card-title">{{ t.title }}</span>
+      {{ chip(t.tone, t.status_ru) }}
+    </span>
+    <span class="meta">
+      <span>Исп.: {{ t.implementer }}</span>
+      <span>Аудит: {{ t.auditor }}</span>
+      <span>Приоритет: {{ t.urgency_ru }}</span>
+      <span>Ревизия {{ t.revision }}</span>
+      <span>Провалов аудита: {{ t.failed_reviews }}</span>
+    </span>
+    {% if t.blocked_ru %}<span class="chip chip-danger">{{ t.blocked_ru }}</span>{% endif %}
+    {% if t.activity.state != 'none' %}<span class="small activity-line activity-{{ t.activity.state }}">{{ t.activity.headline }}</span>{% endif %}
+    <span class="small muted">Обновлено: {{ time(t.updated_at) }}</span>
+  </a>
+</li>
+{% endmacro %}
+
+{% macro chat_item(m, project_id) %}
+<li class="msg msg-{{ m.author.kind }}" data-msg-id="{{ m.id }}" data-key="{{ m.key }}">
+  <div class="msg-head">
+    <strong class="msg-author">{{ m.author.name }}</strong>
+    <span class="chip chip-muted">{{ m.author.kind_ru }}</span>
+    {% if m.kind != 'note' %}<span class="chip chip-info">{{ m.kind_ru }}</span>{% endif %}
+    <span class="muted small">{{ time(m.created_at) }}</span>
+  </div>
+  {% if m.task_id %}<div class="small msg-task">Задача: <a href="/projects/{{ project_id }}/tasks/{{ m.task_id }}">{{ m.task_title or m.task_id }}</a></div>{% endif %}
+  {% if m.reply_to %}<blockquote class="msg-reply" data-reply-to="{{ m.reply_to.id }}"><strong>{{ m.reply_to.author }}</strong>: {{ m.reply_to.snippet }}</blockquote>{% endif %}
+  <div class="msg-body">{{ m.body }}</div>
+  <button type="button" class="btn btn-ghost btn-small" data-act="reply" data-reply-id="{{ m.id }}" data-reply-author="{{ m.author.name }}" data-reply-snippet="{{ snippet(m.body, 60) }}">Ответить</button>
+</li>
+{% endmacro %}

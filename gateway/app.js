@@ -179,8 +179,57 @@
   }
 
   function updatePendingMsgUi() {
-    if (!btnSend) return;
-    btnSend.textContent = pendingMsg ? "Повторить отправку" : "Отправить";
+    if (!btnSend || !msgForm) return;
+    let discard = $("#btn-discard-pending-msg");
+    if (pendingMsg) {
+      if (!discard) {
+        discard = document.createElement("button");
+        discard.type = "button";
+        discard.id = "btn-discard-pending-msg";
+        discard.className = "btn";
+        discard.textContent = "Сбросить сообщение";
+        discard.addEventListener("click", () => {
+          clearPendingMsg();
+          msgErr.hidden = true;
+          msgOk.hidden = false;
+          msgOk.textContent = "Черновик сброса. Можно отправить новый текст.";
+        });
+        btnSend.insertAdjacentElement("afterend", discard);
+      }
+      discard.hidden = false;
+      btnSend.textContent = pendingMsg.outcome === "final" ? "Отправка отклонена — сбросьте" : "Повторить отправку";
+    } else {
+      if (discard) discard.hidden = true;
+      btnSend.textContent = "Отправить";
+    }
+  }
+
+  /**
+   * Trust model (SA-05): Bearer is sent only to https URLs without userinfo.
+   * Values from same-origin pointer.json are trusted (Pages is the trust root).
+   * Manual/?relay= URLs must match known transport host suffixes.
+   */
+  function isTrustedRelayBase(url, { fromPointer = false } = {}) {
+    try {
+      const u = new URL(normalizeBase(url));
+      if (u.protocol !== "https:") return false;
+      if (u.username || u.password) return false;
+      if (!u.hostname || u.hostname.includes("..")) return false;
+      if (fromPointer) return true;
+      if (u.hostname.endsWith(".ts.net")) return true;
+      const suffixes = [
+        ".lhr.life",
+        ".localhost.run",
+        ".trycloudflare.com",
+        ".pinggy.link",
+        ".pinggy.net",
+        ".tunnl.gg",
+        ".bore.pub",
+      ];
+      return suffixes.some((s) => u.hostname.endsWith(s));
+    } catch {
+      return false;
+    }
   }
 
   function applyPayloadToForm(payload) {
@@ -244,6 +293,7 @@
         headers,
         body: body != null ? JSON.stringify(body) : undefined,
         credentials: "omit",
+        redirect: "error",
       });
     } catch (e) {
       const c = classifyFetchFailure(e, null, null);
@@ -325,11 +375,16 @@
 
   async function fetchPointerBase() {
     try {
-      const res = await fetch(POINTER_URL, { cache: "no-store", credentials: "omit" });
+      const res = await fetch(POINTER_URL, {
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+      });
       if (!res.ok) return null;
       const data = await res.json();
       const base = normalizeBase(data && data.relay_base);
-      return base || null;
+      if (!base || !isTrustedRelayBase(base, { fromPointer: true })) return null;
+      return base;
     } catch {
       return null;
     }
@@ -510,7 +565,7 @@
       try {
         // Re-read pointer in case transport URL changed (rare for Funnel; useful for fallback tunnels).
         const pointed = await fetchPointerBase();
-        if (pointed && pointed !== state.base) {
+        if (pointed && pointed !== state.base && isTrustedRelayBase(pointed, { fromPointer: true })) {
           state.base = pointed;
           sessionStorage.setItem(STORE_BASE, state.base);
         }
@@ -552,6 +607,11 @@
     state = { base: "", key: "", projectId: null, me: null };
     pendingTask = loadPending();
     pendingMsg = loadPendingMsg();
+    // SA-06: final server rejection is discarded on disconnect; unknown-outcome kept for retry.
+    if (pendingMsg && pendingMsg.outcome === "final") {
+      clearPendingMsg();
+      pendingMsg = null;
+    }
     showConnect();
   });
 
@@ -579,13 +639,23 @@
     if (pendingMsg) {
       if (pendingMsg.projectId !== state.projectId) {
         msgErr.hidden = false;
-        msgErr.textContent = "Незавершённое сообщение относится к другому проекту.";
+        msgErr.textContent = "Незавершённое сообщение относится к другому проекту. Сбросьте его.";
+        updatePendingMsgUi();
         return;
       }
-      if (body && body !== pendingMsg.body) {
+      if (pendingMsg.outcome === "final" && body && body !== pendingMsg.body) {
         msgErr.hidden = false;
-        msgErr.textContent = "Текст изменён при незавершённой отправке. Верните текст или сбросьте (очистите поле и отключитесь/подключитесь).";
+        msgErr.textContent =
+          "Сервер окончательно отклонил предыдущее сообщение. Нажмите «Сбросить сообщение» или очистите поле и отключитесь/подключитесь — затем отправьте новый текст.";
+        updatePendingMsgUi();
+        return;
+      }
+      if (pendingMsg.outcome !== "final" && body && body !== pendingMsg.body) {
+        msgErr.hidden = false;
+        msgErr.textContent =
+          "Текст изменён при неизвестном исходе. Верните прежний текст и повторите (тот же ключ) или сбросьте сообщение.";
         ev.target.elements.body.value = pendingMsg.body;
+        updatePendingMsgUi();
         return;
       }
     } else {
@@ -594,6 +664,7 @@
         clientMessageId: uuid(),
         projectId: state.projectId,
         body,
+        outcome: "unknown",
       });
     }
 
@@ -615,10 +686,28 @@
       msgOk.textContent = "Отправлено (подтверждено сервером).";
       await refresh();
     } catch (e) {
-      savePendingMsg(pendingMsg);
-      msgErr.hidden = false;
-      msgErr.textContent = (e.message || String(e)) + " — статус неизвестен до подтверждения; повтор безопасен.";
-      if (e.kind === "network" || e.kind === "html") setConnState("lost");
+      const finalHttp =
+        e.kind === "http" &&
+        e.status >= 400 &&
+        e.status < 500 &&
+        e.status !== 408 &&
+        e.status !== 429;
+      if (finalHttp) {
+        pendingMsg = { ...pendingMsg, outcome: "final" };
+        savePendingMsg(pendingMsg);
+        msgErr.hidden = false;
+        msgErr.textContent =
+          (e.message || String(e)) +
+          " — окончательный отказ сервера. Сбросьте сообщение (кнопка) или очистите поле и отключитесь/подключитесь, затем отправьте исправленный текст.";
+      } else {
+        pendingMsg = { ...pendingMsg, outcome: "unknown" };
+        savePendingMsg(pendingMsg);
+        msgErr.hidden = false;
+        msgErr.textContent =
+          (e.message || String(e)) +
+          " — исход неизвестен; повтор с тем же ключом безопасен (дубль не создастся).";
+        if (e.kind === "network" || e.kind === "html") setConnState("lost");
+      }
     } finally {
       btnSend.disabled = false;
       updatePendingMsgUi();
@@ -711,12 +800,30 @@
     const savedBase = sessionStorage.getItem(STORE_BASE);
     const savedKey = sessionStorage.getItem(STORE_KEY);
 
-    if (relayParam) form.elements.base.value = relayParam;
+    if (relayParam && isTrustedRelayBase(relayParam)) form.elements.base.value = relayParam;
     else if (savedBase) form.elements.base.value = savedBase;
     else if (pointed) form.elements.base.value = pointed;
 
     if (savedBase && savedKey) {
-      connect(savedBase, savedKey).catch((e) => showConnect(e.message || String(e)));
+      try {
+        await connect(savedBase, savedKey);
+      } catch (e) {
+        // SA-05: dead saved endpoint → one bounded retry to trusted same-origin pointer (Bearer only there).
+        showConnect(e.message || String(e));
+        if (pointed && isTrustedRelayBase(pointed, { fromPointer: true })) {
+          form.elements.base.value = pointed;
+        }
+        if (pointed && pointed !== savedBase && isTrustedRelayBase(pointed, { fromPointer: true })) {
+          try {
+            await connect(pointed, savedKey);
+          } catch (e2) {
+            showConnect(
+              (e2.message || String(e2)) +
+                " — сохранённый URL недоступен; актуальный pointer тоже не ответил. Проверьте Funnel."
+            );
+          }
+        }
+      }
     } else {
       setConnState("idle");
     }

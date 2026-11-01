@@ -1,0 +1,3 @@
+{% from "_macros.html" import chat_item %}
+{% for m in chat.messages %}{{ chat_item(m, project_id) }}
+{% endfor %}

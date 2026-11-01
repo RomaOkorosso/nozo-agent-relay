@@ -1,0 +1,67 @@
+# /home/roma/.config/systemd/user/nozo-relay.service
+[Unit]
+Description=Nozo Agent Relay (loopback :8765)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay
+Environment=HOME=/home/roma
+Environment=PATH=/home/roma/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NOZO_RELAY_PUBLIC_HOST=roma-gv628rc.tailbfec94.ts.net
+Environment=NOZO_RELAY_GATEWAY_ORIGIN=https://romaokorosso.github.io
+ExecStart=/bin/bash "/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay/scripts/run_relay_stable.sh"
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+StandardOutput=append:/home/roma/.local/state/nozo-relay/relay.log
+StandardError=append:/home/roma/.local/state/nozo-relay/relay.log
+
+[Install]
+WantedBy=default.target
+
+# /home/roma/.config/systemd/user/nozo-tailscale-surface.service
+[Unit]
+Description=Nozo Tailscale Serve+Funnel surface for Relay
+After=network-online.target nozo-relay.service
+Wants=network-online.target
+Requires=nozo-relay.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=/usr/bin:/bin:/home/roma/.local/bin
+Environment=NOZO_RELAY_PUBLIC_HOST=roma-gv628rc.tailbfec94.ts.net
+ExecStart=/bin/bash "/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay/scripts/ensure_tailscale_surface.sh"
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
+# /home/roma/.config/systemd/user/nozo-watchdog.service
+[Unit]
+Description=Nozo Relay health watchdog (Serve/Funnel refresh)
+After=nozo-relay.service
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/bin:/bin:/home/roma/.local/bin
+ExecStart=/bin/bash "/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay/scripts/nozo_watchdog.sh"
+
+# /home/roma/.config/systemd/user/nozo-watchdog.timer
+[Unit]
+Description=Run Nozo watchdog every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Persistent=true
+Unit=nozo-watchdog.service
+
+[Install]
+WantedBy=timers.target

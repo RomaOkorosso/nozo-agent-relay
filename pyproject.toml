@@ -1,0 +1,54 @@
+[project]
+name = "nozo-agent-relay"
+version = "0.1.0"
+description = "Nozo Agent Relay: local multi-agent task relay with durable queue, auth and audit protocol"
+readme = "README.md"
+authors = [
+    { name = "RomaOkorosso", email = "okorosso.roma.work@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.1",
+    "anyio>=4.15.1",
+    "argon2-cffi>=25.1.0",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "itsdangerous>=2.2.0",
+    "jinja2>=3.1.6",
+    "pydantic>=2",
+    "pydantic-settings>=2.16.2",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2",
+    "uvicorn[standard]>=0.54.0",
+    "websockets>=17.3",
+]
+
+[project.scripts]
+nozo-agent-relay = "nozo_relay.__main__:main"
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.3.0,<3"]
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mcp>=2.3.0,<3",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+]
+
+[tool.uv.build-backend]
+module-name = "nozo_relay"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+markers = [
+    "real_cli: uses a REAL provider CLI (Cursor/Codex); opt-in with NOZO_RUN_REAL_CLI=1, skipped (NOT_VERIFIED) without auth/quota",
+    "real_llm: sends data to a real LLM provider and may consume quota",
+]

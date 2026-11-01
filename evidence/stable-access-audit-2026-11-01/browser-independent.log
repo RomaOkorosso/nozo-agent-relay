@@ -1,0 +1,39 @@
+No entry for terminal type "dumb";
+using dumb terminal settings.
+F..F                                                                     [100%]
+=================================== FAILURES ===================================
+___________ test_startup_uses_current_pointer_if_saved_endpoint_dead ___________
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/home/roma/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome> version=155.0.8059.39>
+
+    def test_startup_uses_current_pointer_if_saved_endpoint_dead(browser):
+        ctx,page,calls,state=setup(browser,old_down=True)
+        page.locator('#connect-error').wait_for(state='visible')
+        page.clock.run_for(16000)
+>       assert any(c['url']==NEW+'/api/v1/me' for c in calls),'Valid current pointer ignored on startup; only dead saved endpoint tried, polling never starts'
+E       AssertionError: Valid current pointer ignored on startup; only dead saved endpoint tried, polling never starts
+E       assert False
+E        +  where False = any(<generator object test_startup_uses_current_pointer_if_saved_endpoint_dead.<locals>.<genexpr> at 0x7251e3f13140>)
+
+tests/test_stable_browser_independent.py:47: AssertionError
+_________ test_rejected_message_can_be_cleared_by_documented_ui_steps __________
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/home/roma/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome> version=155.0.8059.39>
+
+    def test_rejected_message_can_be_cleared_by_documented_ui_steps(browser):
+        ctx,page,calls,state=setup(browser,saved=NEW,reject_messages=True)
+        page.locator('#app-panel').wait_for(state='visible');page.locator('#msg-form textarea').fill('rejected fixture message');page.locator('#btn-send-msg').click();page.locator('#msg-error').wait_for(state='visible')
+        page.locator('#msg-form textarea').fill('corrected message');page.locator('#btn-send-msg').click()
+        assert 'отключитесь' in page.locator('#msg-error').inner_text()
+        page.locator('#msg-form textarea').fill('');page.locator('#btn-disconnect').click()
+        page.locator('#connect-form [name=base]').fill(NEW);page.locator('#connect-form [name=key]').fill('SENTINEL_FIXTURE_ONLY');page.locator('#connect-form button').click();page.locator('#app-panel').wait_for(state='visible')
+        pending=page.evaluate('sessionStorage.getItem("nozo_gw_pending_msg")')
+>       assert pending is None,'UI-prescribed clear + disconnect/reconnect retains rejected immutable message; user cannot send corrected text'
+E       AssertionError: UI-prescribed clear + disconnect/reconnect retains rejected immutable message; user cannot send corrected text
+E       assert '{"idempotencyKey":"f2e1a434-a2fb-411a-be13-2467f339714b","clientMessageId":"55ecaa9b-18c0-44ab-952f-81da819e234d","projectId":"11111111-1111-4111-8111-111111111111","body":"rejected fixture message"}' is None
+
+tests/test_stable_browser_independent.py:78: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_stable_browser_independent.py::test_startup_uses_current_pointer_if_saved_endpoint_dead
+FAILED tests/test_stable_browser_independent.py::test_rejected_message_can_be_cleared_by_documented_ui_steps
+2 failed, 2 passed in 3.97s

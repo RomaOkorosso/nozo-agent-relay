@@ -1,0 +1,18 @@
+{% from "_macros.html" import chip, control_row %}
+<div class="summary" data-hw="{{ hw }}" data-paused="{{ 1 if project.paused else 0 }}">
+  <div class="counters">
+    <div class="counter"><b>{{ counters.queued }}</b><span>В очереди</span></div>
+    <div class="counter"><b>{{ counters.active }}</b><span>В работе</span></div>
+    <div class="counter"><b>{{ counters.review }}</b><span>Ждут аудита</span></div>
+    <div class="counter {{ 'counter-alert' if counters.attention }}"><b>{{ counters.attention }}</b><span>Внимание</span></div>
+  </div>
+  {% if project.paused %}
+  <p class="banner banner-warn" data-project-paused>Проект на паузе: новые задания не выдаются.</p>
+  {% endif %}
+  {% if controls %}
+  <h3>Команды остановки</h3>
+  <ul class="controls">
+    {% for c in controls %}{{ control_row(c, True) }}{% endfor %}
+  </ul>
+  {% endif %}
+</div>

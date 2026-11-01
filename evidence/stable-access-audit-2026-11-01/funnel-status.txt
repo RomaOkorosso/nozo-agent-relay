@@ -1,0 +1,7 @@
+
+# Funnel on:
+#     - https://roma-gv628rc.tailbfec94.ts.net
+
+https://roma-gv628rc.tailbfec94.ts.net (Funnel on)
+|-- / proxy http://127.0.0.1:8765
+

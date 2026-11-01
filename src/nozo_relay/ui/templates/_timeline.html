@@ -1,0 +1,11 @@
+{% from "_macros.html" import time %}
+<ol class="timeline" data-hw="{{ hw }}">
+{% for e in timeline %}
+  <li class="tl" data-seq="{{ e.seq }}" data-type="{{ e.type }}">
+    <div class="tl-head"><b>{{ e.label }}</b> <span class="muted small">{{ e.actor }} · {{ time(e.at) }}</span></div>
+    {% if e.text %}<div class="small">{{ e.text }}{% if e.report_id %} · <a href="#report-{{ e.report_id }}">отчёт</a>{% endif %}</div>{% endif %}
+  </li>
+{% else %}
+  <li class="muted empty">Событий пока нет.</li>
+{% endfor %}
+</ol>

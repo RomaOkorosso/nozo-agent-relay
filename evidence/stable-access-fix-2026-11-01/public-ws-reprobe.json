@@ -1,0 +1,7 @@
+{
+  "ip": "176.58.88.82",
+  "me_http": "403",
+  "result": "rejected",
+  "type": "InvalidStatus",
+  "msg": "server rejected WebSocket connection: HTTP 403"
+}
