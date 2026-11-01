@@ -1,9 +1,9 @@
 {
-  "relay_base": "https://6045b0669f3b07.lhr.life",
+  "relay_base": "https://370962c8113382.lhr.life",
   "relay_fallbacks": [
     "https://roma-gv628rc.tailbfec94.ts.net"
   ],
-  "updated_at": "2026-11-01T11:23:00Z",
+  "updated_at": "2026-11-01T11:43:03Z",
   "transport": "localhost_run_ipv4_primary",
-  "note": "Primary is free IPv4 tunnel (lhr.life). Tailscale Funnel AAAA currently times out from many browsers → Failed to fetch; Funnel kept as fallback / owner Serve. No keys."
+  "note": "No keys. Pages needs commit/push to publish pointer. Funnel kept for tailnet/owner; IPv4 tunnel preferred for browsers when available."
 }
