@@ -2,16 +2,17 @@
 
 Static SPA. ChatGPT opens a stable `*.github.io` page; the browser calls your **public Relay HTTPS URL** with the coordinator **Bearer** key. Messages/tasks land in Relay only (no Telegram/ntfy).
 
-GitHub Pages is **not** a reverse proxy. A live tunnel to Relay is still required (`/tmp/nozo-public-url.txt`).
+GitHub Pages is **not** a reverse proxy. Relay must be reachable over public HTTPS.
+
+**Primary transport (stable):** Tailscale Funnel → `https://roma-gv628rc.tailbfec94.ts.net` (see `pointer.json`).  
+Ephemeral free tunnels are fallback only. Operator guide: [`docs/OPERATOR_STABLE_ACCESS.md`](../docs/OPERATOR_STABLE_ACCESS.md).
 
 ## Deploy
 
 1. Push this repo to GitHub; enable **Settings → Pages → Source: GitHub Actions**.
-2. Workflow [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) publishes the `gateway/` folder.
-3. Set Relay env (or use `scripts/run_relay_public.sh`):
-   - `NOZO_RELAY_GATEWAY_ORIGIN=https://<you>.github.io`
-   - `NOZO_RELAY_CORS_ORIGIN_SUFFIXES=[".github.io"]`
-4. Start a free tunnel + Relay as usual.
+2. Workflow [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) publishes the `gateway/` folder (including `pointer.json`).
+3. Run Relay + surface: `systemctl --user start nozo-relay.service nozo-tailscale-surface.service`
+4. CORS: `NOZO_RELAY_CORS_ORIGIN_SUFFIXES=[".github.io"]` (set by `scripts/run_relay_stable.sh`).
 
 ## Connect ChatGPT
 
