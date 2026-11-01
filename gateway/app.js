@@ -33,13 +33,17 @@
   const btnCreate = $("#btn-create-task");
   const btnSend = $("#btn-send-msg");
 
-  let state = { base: "", key: "", projectId: null, me: null };
+  let state = { base: "", key: "", projectId: null, me: null, selectedTaskId: null };
   /** @type {{ idempotencyKey: string, projectId: string, payload: object } | null} */
   let pendingTask = null;
-  /** @type {{ idempotencyKey: string, clientMessageId: string, projectId: string, body: string } | null} */
+  /** @type {{ idempotencyKey: string, clientMessageId: string, projectId: string, body: string, taskId: string|null } | null} */
   let pendingMsg = null;
   let pollTimer = null;
   let recovering = false;
+  /** @type {object[]} */
+  let cachedTasks = [];
+  /** @type {object|null} */
+  let selectedTask = null;
 
   const STATE_LABEL = {
     idle: "не подключено",
@@ -279,13 +283,14 @@
     }
   }
 
-  async function api(path, { method = "GET", body = null, idempotencyKey = null } = {}) {
+  async function api(path, { method = "GET", body = null, idempotencyKey = null, ifMatch = null } = {}) {
     const headers = {
       Authorization: `Bearer ${state.key}`,
       Accept: "application/json",
     };
     if (body != null) headers["Content-Type"] = "application/json";
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+    if (ifMatch != null && ifMatch !== "") headers["If-Match"] = `"${ifMatch}"`;
     let res;
     try {
       res = await fetch(`${state.base}${path}`, {
@@ -315,14 +320,21 @@
       }
       throw err;
     }
+    let data = null;
     try {
-      return text ? JSON.parse(text) : null;
+      data = text ? JSON.parse(text) : null;
     } catch {
       const c = classifyFetchFailure(null, res, text);
       const err = new Error(c.message);
       err.kind = c.kind;
       throw err;
     }
+    const etag = res.headers.get("ETag");
+    if (data && typeof data === "object" && etag && data.version == null) {
+      const n = Number(String(etag).replace(/W\//i, "").replace(/"/g, ""));
+      if (Number.isFinite(n)) data.version = n;
+    }
+    return data;
   }
 
   function showConnect(errText) {
@@ -482,21 +494,45 @@
     ]);
     renderTasks([...tasks].reverse());
     renderMessages(msgs);
+    if (state.selectedTaskId && !cachedTasks.some((t) => t.id === state.selectedTaskId)) {
+      state.selectedTaskId = null;
+      renderTaskDetail(null);
+    }
     if (connChip.dataset.state === "lost" || connChip.dataset.state === "recovering") {
       setConnState("connected", state.base.replace(/^https?:\/\//, ""));
     }
   }
 
+  function statusFilterValue() {
+    const el = $("#task-status-filter");
+    return el ? String(el.value || "") : "";
+  }
+
   function renderTasks(items) {
+    cachedTasks = items || [];
+    const filter = statusFilterValue();
+    const shown = filter ? cachedTasks.filter((t) => t.status === filter) : cachedTasks;
     taskList.innerHTML = "";
-    if (!items.length) {
+    if (!shown.length) {
       taskList.innerHTML = '<li class="muted">Нет задач</li>';
       return;
     }
-    for (const t of items) {
+    for (const t of shown) {
       const li = document.createElement("li");
+      li.className = "task-item" + (t.id === state.selectedTaskId ? " selected" : "");
+      li.dataset.taskId = t.id;
       const title = t.title || t.summary || t.id;
-      li.textContent = `${t.status || "?"} — ${title}`;
+      li.innerHTML = `<span class="task-status">${t.status || "?"}</span> <span class="task-title"></span>`;
+      li.querySelector(".task-title").textContent = title;
+      li.title = t.id || "";
+      li.tabIndex = 0;
+      li.addEventListener("click", () => selectTask(t.id));
+      li.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          selectTask(t.id);
+        }
+      });
       taskList.appendChild(li);
     }
   }
@@ -508,13 +544,103 @@
       div.className = "bubble";
       const meta = document.createElement("div");
       meta.className = "meta";
-      meta.textContent = `${m.kind || "note"} · ${m.created_at || ""} · ${m.sender_id || ""}`;
+      const taskBit = m.task_id ? ` · task ${String(m.task_id).slice(0, 8)}` : "";
+      meta.textContent = `${m.kind || "note"} · ${m.created_at || ""}${taskBit}`;
       const body = document.createElement("div");
       body.textContent = m.body || "";
       div.append(meta, body);
       messagesEl.appendChild(div);
     }
     messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function setActionFeedback(okText, errText) {
+    const ok = $("#task-action-ok");
+    const err = $("#task-action-error");
+    if (ok) {
+      ok.hidden = !okText;
+      ok.textContent = okText || "";
+    }
+    if (err) {
+      err.hidden = !errText;
+      err.textContent = errText || "";
+    }
+  }
+
+  function updateTaskActionButtons(task) {
+    const st = task && task.status;
+    const btnEnq = $("#btn-enqueue");
+    const btnPause = $("#btn-pause");
+    const btnResume = $("#btn-resume");
+    const btnCancel = $("#btn-cancel");
+    if (btnEnq) btnEnq.hidden = st !== "draft";
+    if (btnPause) btnPause.hidden = !["queued", "claimed", "running", "awaiting_review", "reviewing", "changes_requested"].includes(st);
+    if (btnResume) btnResume.hidden = st !== "paused";
+    if (btnCancel) btnCancel.hidden = ["cancelled", "done", "failed"].includes(st) || !st;
+  }
+
+  function renderTaskDetail(task) {
+    const panel = $("#task-detail");
+    if (!panel) return;
+    if (!task) {
+      panel.hidden = true;
+      selectedTask = null;
+      return;
+    }
+    selectedTask = task;
+    panel.hidden = false;
+    const rev = task.current_revision || {};
+    const req = rev.requirements || task.requirements || "";
+    $("#task-detail-meta").textContent =
+      `${task.status || "?"} · v${task.version ?? "?"} · ${task.id || ""}`;
+    const body = $("#task-detail-body");
+    body.textContent = [
+      task.title || "",
+      "",
+      String(req).slice(0, 1200),
+      rev.acceptance && rev.acceptance.length ? "\nAcceptance:\n- " + rev.acceptance.join("\n- ") : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    updateTaskActionButtons(task);
+    setActionFeedback("", "");
+  }
+
+  async function selectTask(taskId) {
+    if (!taskId || !state.projectId) return;
+    state.selectedTaskId = taskId;
+    renderTasks(cachedTasks);
+    try {
+      const detail = await api(`/api/v1/projects/${state.projectId}/tasks/${taskId}`);
+      renderTaskDetail(detail);
+    } catch (e) {
+      const cached = cachedTasks.find((t) => t.id === taskId) || null;
+      renderTaskDetail(cached);
+      setActionFeedback("", e.message || String(e));
+    }
+  }
+
+  async function enqueueTask(task) {
+    if (!task || !state.projectId) throw new Error("Нет задачи");
+    const version = task.version;
+    if (version == null) throw new Error("Нет version для If-Match — обновите задачу");
+    return api(`/api/v1/projects/${state.projectId}/tasks/${task.id}/enqueue`, {
+      method: "POST",
+      idempotencyKey: uuid(),
+      ifMatch: version,
+    });
+  }
+
+  async function controlTask(task, command, reason) {
+    if (!task || !state.projectId) throw new Error("Нет задачи");
+    const version = task.version;
+    if (version == null) throw new Error("Нет version для If-Match");
+    return api(`/api/v1/projects/${state.projectId}/tasks/${task.id}/controls`, {
+      method: "POST",
+      idempotencyKey: uuid(),
+      ifMatch: version,
+      body: { command, reason: reason || `${command} via Pages gateway` },
+    });
   }
 
   function parseLines(raw) {
@@ -714,25 +840,29 @@
         return;
       }
     } else {
+      const attach = !!(msgForm.elements.attach_task && msgForm.elements.attach_task.checked);
       savePendingMsg({
         idempotencyKey: uuid(),
         clientMessageId: uuid(),
         projectId: state.projectId,
         body,
+        taskId: attach && state.selectedTaskId ? state.selectedTaskId : null,
         outcome: "unknown",
       });
     }
 
     btnSend.disabled = true;
     try {
+      const msgBody = {
+        client_message_id: pendingMsg.clientMessageId,
+        kind: "note",
+        body: pendingMsg.body,
+      };
+      if (pendingMsg.taskId) msgBody.task_id = pendingMsg.taskId;
       await api(`/api/v1/projects/${state.projectId}/messages`, {
         method: "POST",
         idempotencyKey: pendingMsg.idempotencyKey,
-        body: {
-          client_message_id: pendingMsg.clientMessageId,
-          kind: "note",
-          body: pendingMsg.body,
-        },
+        body: msgBody,
       });
       clearPendingMsg();
       saveJson(STORE_DRAFT_MSG, null);
@@ -810,6 +940,8 @@
       });
     }
 
+    const enqueueAfter = !!(taskForm.elements.enqueue_after_create && taskForm.elements.enqueue_after_create.checked);
+
     btnCreate.disabled = true;
     try {
       const created = await api(`/api/v1/projects/${state.projectId}/tasks`, {
@@ -822,9 +954,23 @@
       taskForm.elements.title.value = "";
       taskForm.elements.requirements.value = "";
       taskForm.elements.acceptance.value = "";
+      let statusNote = created.status || "draft";
+      if (enqueueAfter && created.id) {
+        try {
+          const enq = await enqueueTask(created);
+          statusNote = (enq && enq.status) || "queued";
+        } catch (enqErr) {
+          taskOk.hidden = false;
+          taskOk.textContent = `Создано draft ${created.id}; enqueue не удался: ${enqErr.message || enqErr}`;
+          await refresh();
+          if (created.id) await selectTask(created.id);
+          return;
+        }
+      }
       taskOk.hidden = false;
-      taskOk.textContent = `Создано: ${created.id || created.title || "ok"} (${created.status || "draft"})`;
+      taskOk.textContent = `Создано: ${created.id || created.title || "ok"} (${statusNote})`;
       await refresh();
+      if (created.id) await selectTask(created.id);
     } catch (e) {
       savePending(pendingTask);
       taskErr.hidden = false;
@@ -846,6 +992,57 @@
   updatePendingUi();
   pendingMsg = loadPendingMsg();
   updatePendingMsgUi();
+
+  const statusFilter = $("#task-status-filter");
+  if (statusFilter) {
+    statusFilter.addEventListener("change", () => renderTasks(cachedTasks));
+  }
+
+  async function runSelectedAction(fn, okLabel) {
+    if (!selectedTask && state.selectedTaskId) {
+      await selectTask(state.selectedTaskId);
+    }
+    if (!selectedTask) {
+      setActionFeedback("", "Сначала выберите задачу");
+      return;
+    }
+    setActionFeedback("", "");
+    try {
+      await fn(selectedTask);
+      setActionFeedback(okLabel, "");
+      await refresh();
+      if (state.selectedTaskId) await selectTask(state.selectedTaskId);
+    } catch (e) {
+      setActionFeedback("", e.message || String(e));
+    }
+  }
+
+  const btnEnqueue = $("#btn-enqueue");
+  if (btnEnqueue) {
+    btnEnqueue.addEventListener("click", () =>
+      runSelectedAction((t) => enqueueTask(t), "Задача поставлена в очередь")
+    );
+  }
+  const btnPause = $("#btn-pause");
+  if (btnPause) {
+    btnPause.addEventListener("click", () =>
+      runSelectedAction((t) => controlTask(t, "pause"), "Pause отправлен")
+    );
+  }
+  const btnResume = $("#btn-resume");
+  if (btnResume) {
+    btnResume.addEventListener("click", () =>
+      runSelectedAction((t) => controlTask(t, "resume"), "Resume отправлен")
+    );
+  }
+  const btnCancel = $("#btn-cancel");
+  if (btnCancel) {
+    btnCancel.addEventListener("click", () => {
+      const reason = window.prompt("Причина cancel?", "cancelled via Pages gateway");
+      if (!reason) return;
+      runSelectedAction((t) => controlTask(t, "cancel", reason), "Cancel отправлен");
+    });
+  }
 
   (async () => {
     const form = $("#connect-form");

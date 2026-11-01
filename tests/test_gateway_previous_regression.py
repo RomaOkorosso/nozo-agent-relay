@@ -28,13 +28,18 @@ def gw(api):
         route.fulfill(status=200,body=(root/name).read_bytes(),content_type={'html':'text/html','js':'application/javascript','css':'text/css','json':'application/json'}[name.rsplit('.',1)[-1]])
       def backend(route):
         request=route.request;url=urlsplit(request.url);path=url.path+('?' + url.query if url.query else '')
-        headers={k:v for k,v in request.headers.items() if k.lower() in ('authorization','content-type','idempotency-key')}
+        headers={k:v for k,v in request.headers.items() if k.lower() in ('authorization','content-type','idempotency-key','if-match')}
         response=client.request(request.method,path,content=request.post_data,headers=headers)
         if request.method=='POST' and url.path.endswith('/tasks'):
           config['posts'].append({'status':response.status_code,'key':headers.get('idempotency-key'),'body':request.post_data_json})
           if config['drop_next']:
             config['drop_next']=False;route.abort('connectionreset');return
-        route.fulfill(status=response.status_code,body=response.content,headers={'Content-Type':'application/json','Access-Control-Allow-Origin':UI})
+        if request.method=='POST' and url.path.rstrip('/').endswith('/enqueue'):
+          config.setdefault('enqueues',[]).append({'status':response.status_code,'if_match':headers.get('if-match')})
+        out_headers={'Content-Type':'application/json','Access-Control-Allow-Origin':UI}
+        etag=response.headers.get('etag')
+        if etag: out_headers['ETag']=etag
+        route.fulfill(status=response.status_code,body=response.content,headers=out_headers)
       page.route(UI+'/**',ui);page.route(API+'/**',backend)
       page.goto(UI+'/');page.locator('#connect-form [name=base]').fill(API);page.locator('#connect-form [name=key]').fill(key);page.locator('#connect-form button').click();page.locator('#app-panel').wait_for(state='visible')
       def fill(title='independent gateway task',acceptance='works'):
@@ -79,3 +84,13 @@ def test_created_task_visible_after_first_page_full(gw):
     api.clock.advance(seconds=1)
     fill('new task must be visible');click();page.locator('#task-ok').wait_for(state='visible')
     assert 'new task must be visible' in page.locator('#task-list').inner_text(), 'Refresh only loads oldest 50 tasks, newly created task omitted'
+
+def test_create_with_enqueue_leaves_queued_not_draft_spam(gw):
+    page,c,fill,click,api=gw
+    page.locator('[name=enqueue_after_create]').check()
+    fill('enqueue me');click();page.locator('#task-ok').wait_for(state='visible')
+    items=api.req('owner','GET',api.p('/tasks')).json()['items']
+    assert len(items)==1
+    assert items[0]['status']=='queued', items[0]
+    assert c.get('enqueues') and c['enqueues'][-1]['status'] in (200,201)
+    assert page.locator('#task-ok').inner_text().lower().find('queued')>=0

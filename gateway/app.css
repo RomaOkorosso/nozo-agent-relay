@@ -77,6 +77,40 @@ input, textarea, select {
   border-bottom: 1px solid var(--line);
   font-size: 0.92rem;
 }
+.list li.task-item { cursor: pointer; border-radius: 6px; }
+.list li.task-item:hover { background: #f0ebe3; }
+.list li.task-item.selected {
+  background: #e8eefc;
+  outline: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.task-status {
+  display: inline-block;
+  min-width: 4.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.field.compact { margin: 0.35rem 0 0.5rem; font-size: 0.85rem; }
+.task-detail {
+  margin: 1rem 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.task-detail-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: 0.85rem;
+  background: #faf7f1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  max-height: 12rem;
+  overflow: auto;
+  margin: 0.4rem 0 0.65rem;
+}
+.task-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .messages {
   height: min(55vh, 28rem);
   overflow: auto;

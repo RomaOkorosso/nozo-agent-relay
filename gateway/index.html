@@ -37,8 +37,35 @@
         <p id="whoami" class="muted"></p>
         <select id="project-select"></select>
         <h2>Задачи</h2>
+        <label class="field compact">Фильтр статуса
+          <select id="task-status-filter">
+            <option value="">все</option>
+            <option value="draft">draft</option>
+            <option value="queued">queued</option>
+            <option value="claimed">claimed</option>
+            <option value="running">running</option>
+            <option value="awaiting_review">awaiting_review</option>
+            <option value="paused">paused</option>
+            <option value="cancelled">cancelled</option>
+            <option value="done">done</option>
+          </select>
+        </label>
         <ul id="task-list" class="list"></ul>
         <button type="button" id="btn-refresh" class="btn">Обновить</button>
+
+        <div id="task-detail" class="task-detail" hidden>
+          <h2>Выбранная задача</h2>
+          <p id="task-detail-meta" class="muted"></p>
+          <pre id="task-detail-body" class="task-detail-body"></pre>
+          <div class="task-actions">
+            <button type="button" class="btn primary" id="btn-enqueue" hidden>В очередь</button>
+            <button type="button" class="btn" id="btn-pause" hidden>Pause</button>
+            <button type="button" class="btn" id="btn-resume" hidden>Resume</button>
+            <button type="button" class="btn" id="btn-cancel" hidden>Cancel</button>
+          </div>
+          <p id="task-action-error" class="err" role="alert" hidden></p>
+          <p id="task-action-ok" class="ok" hidden></p>
+        </div>
 
         <h2>Новая задача</h2>
         <form id="task-form" class="task-form">
@@ -74,6 +101,7 @@ tests/**</textarea>
             </label>
             <label class="check"><input name="autonomous" type="checkbox" checked> autonomous</label>
           </div>
+          <label class="check"><input name="enqueue_after_create" type="checkbox" checked> сразу поставить в очередь (enqueue)</label>
           <button class="btn primary" type="submit" id="btn-create-task">Создать задачу</button>
           <p id="task-error" class="err" role="alert" hidden></p>
           <p id="task-ok" class="ok" hidden></p>
@@ -84,6 +112,7 @@ tests/**</textarea>
         <div id="messages" class="messages" aria-live="polite"></div>
         <form id="msg-form" class="composer">
           <textarea name="body" rows="3" required maxlength="16000" placeholder="Сообщение в Relay…"></textarea>
+          <label class="check"><input name="attach_task" type="checkbox" id="msg-attach-task"> привязать к выбранной задаче</label>
           <button class="btn primary" type="submit" id="btn-send-msg">Отправить</button>
         </form>
         <p id="msg-error" class="err" role="alert" hidden></p>

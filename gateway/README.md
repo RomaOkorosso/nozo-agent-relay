@@ -23,7 +23,7 @@ uv run python scripts/print_gateway_connect.py --print-key
 1. Open the printed `GATEWAY_OPEN` URL (includes `?relay=` when the tunnel file exists).
 2. Paste the coordinator Bearer from `data/clients/chatgpt_credentials.json`.
 3. Use chat/tasks; owner sees the same project in the private panel.
-4. **Create task** (coordinator): fill title/requirements/acceptance, implementer & auditor UUIDs, `delegation_id`, allowed paths. Pending create is stored in `sessionStorage` as an **immutable** `{idempotencyKey, payload}` until success or explicit discard (survives reload; editing fields while pending is blocked with reconcile). Acceptance/paths over API limits error out (no silent truncate). Agent UUIDs remembered in `sessionStorage` only.
+4. **Create / manage tasks** (coordinator): fill title/requirements/acceptance, implementer & auditor UUIDs, `delegation_id`, allowed paths. By default **«сразу поставить в очередь»** calls `POST …/enqueue` with `If-Match` after create (draft → queued) so agents get real work, not draft spam. Click a task to open detail: enqueue / pause / resume / cancel. Chat can attach notes to the selected task (`task_id`). Pending create is stored in `sessionStorage` as an **immutable** `{idempotencyKey, payload}` until success or explicit discard. Acceptance/paths over API limits error out (no silent truncate). Agent UUIDs remembered in `sessionStorage` only.
 
 Do **not** commit the Bearer key or put it in `config.example.json`.
 
