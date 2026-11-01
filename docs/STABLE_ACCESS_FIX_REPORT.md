@@ -5,7 +5,7 @@
 
 ## Commit / tree
 
-- Target commit: *(filled after git commit)*  
+- Target commit: `43e486677e1b523866dc9948a038dffecd4d6e9e`  
 - Working tree: full `src/`, `tests/`, `scripts/`, `pyproject.toml`, `uv.lock`, docs committed (secrets/`data/` gitignored).  
 - Gateway Pages assets updated in same commit where applicable.
 
