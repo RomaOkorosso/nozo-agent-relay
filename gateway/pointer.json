@@ -1,9 +1,9 @@
 {
-  "relay_base": "https://f0d38fbd07a375.lhr.life",
+  "relay_base": "https://de4d75dbd0afc9.lhr.life",
   "relay_fallbacks": [
     "https://roma-gv628rc.tailbfec94.ts.net"
   ],
-  "updated_at": "2026-11-07T14:01:20Z",
+  "updated_at": "2026-11-07T14:06:20Z",
   "transport": "localhost_run_ipv4_primary",
   "note": "No keys. Pages needs commit/push to publish pointer. Funnel kept for tailnet/owner; IPv4 tunnel preferred for browsers when available."
 }
