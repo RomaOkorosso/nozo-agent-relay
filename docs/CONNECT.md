@@ -3,7 +3,7 @@
 Вставляй этот файл в чат или в project instructions целиком.  
 Секреты **не** хранятся здесь и **не** вставляются в промпт.
 
-Актуально: 2026-11-01. Репозиторий: `nozo-agent-relay`. Ноутбук Ромы должен быть онлайн.
+Актуально: 2026-11-07. Репозиторий: `nozo-agent-relay`. Ноутбук Ромы должен быть онлайн.
 
 ---
 
@@ -56,6 +56,19 @@ curl -fsS https://romaokorosso.github.io/nozo-agent-relay/pointer.json
 
 Перезапуск Relay: `systemctl --user restart nozo-relay.service`  
 Логи: `~/.local/state/nozo-relay/relay.log`
+
+### Полный стоп / старт (без трафика)
+
+Когда Relay не нужен — останови всё публичное (IPv4 `localhost.run` + Funnel + relay), чтобы не жечь трафик:
+
+```bash
+cd "/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay"
+./scripts/nozo_stop.sh    # полный стоп, без трафика
+./scripts/nozo_start.sh   # снова поднять
+```
+
+По умолчанию stop ещё **disable**’ит unit’ы (не автостарт после логина). Временный стоп: `./scripts/nozo_stop.sh --keep-enabled`.  
+Pages-статика остаётся; API мёртв до start. `tailscaled` OS может жить — гасим только Nozo surface/tunnel/relay. Подробнее: `docs/OPERATOR_STABLE_ACCESS.md`.
 
 ### Если Pages у координатора «не коннектится»
 

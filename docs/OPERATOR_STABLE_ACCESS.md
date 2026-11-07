@@ -1,6 +1,6 @@
 # Устойчивый доступ к Nozo Relay (бесплатно)
 
-Обновлено: 2026-11-01. Ноутбук должен быть онлайн и в сессии пользователя `roma` (systemd --user).
+Обновлено: 2026-11-07. Ноутбук должен быть онлайн и в сессии пользователя `roma` (systemd --user).
 
 **Инструкция «вставь в проект» для Ромы / Codex / ChatGPT:** [`CONNECT.md`](CONNECT.md).
 
@@ -17,7 +17,7 @@ Funnel-hostname стабилен; **lhr.life hostname плавает** — ак�
 ## Службы (systemd --user)
 
 ```bash
-systemctl --user status nozo-relay.service nozo-tailscale-surface.service nozo-watchdog.timer
+systemctl --user status nozo-relay.service nozo-tailscale-surface.service nozo-ipv4-tunnel.service nozo-watchdog.timer
 systemctl --user restart nozo-relay.service
 systemctl --user start nozo-tailscale-surface.service
 journalctl --user -u nozo-relay.service -n 50 --no-pager
@@ -28,14 +28,22 @@ tail -50 ~/.local/state/nozo-relay/relay.log
 |---|---|
 | `nozo-relay.service` | Relay на `127.0.0.1:8765`, CORS для github.io + loopback + ts.net |
 | `nozo-tailscale-surface.service` | `tailscale funnel --bg 8765` + обновление `pointer.json` при смене URL |
-| `nozo-watchdog.timer` | каждые 2 мин: health + мягкий refresh Funnel |
+| `nozo-ipv4-tunnel.service` | бесплатный IPv4 SSH-туннель `nokey@localhost.run` (основной трафик Pages) |
+| `nozo-watchdog.timer` | каждые 2 мин: health + мягкий refresh Funnel (+ может пушить pointer) |
 
-Остановка:
+### Полный стоп / старт (рекомендуется)
+
+Чтобы **не жрать трафик** (localhost.run + Funnel probes) до следующего включения:
 
 ```bash
-systemctl --user stop nozo-watchdog.timer nozo-tailscale-surface.service nozo-relay.service
-tailscale funnel --https=443 off   # снять публичный Funnel
+cd "/home/roma/Desktop/Nozo Agent Relay/nozo-agent-relay"
+./scripts/nozo_stop.sh    # полный стоп, без трафика
+./scripts/nozo_start.sh   # снова поднять
 ```
+
+- `nozo_stop.sh` останавливает watchdog → ipv4-tunnel → surface → relay, убивает leftover SSH/`run_localhost_run_tunnel`, снимает Funnel (`tailscale funnel --https=443 off`) и Serve на `:443` (targeted; `serve reset` только если всё ещё проксирует `:8765`). По умолчанию ещё **`systemctl --user disable`** этих четырёх unit’ов — при `Linger=no` они **не** поднимутся после следующего графического логина. Флаг `--keep-enabled` — только временный стоп до reboot/login. `--dry-run` — показать действия без изменений.
+- `nozo_start.sh` делает `enable --now` (relay → surface → ipv4-tunnel → watchdog.timer), ждёт local ready, при необходимости освежает surface. **Не** коммитит/пушит `pointer.json` сам; если pointer грязный — скажет.
+- Честно: статическая GitHub Pages остаётся доступной; **API мёртв**, пока не сделан start. Демон `tailscaled` (OS) может продолжать работать — скрипты гасят только Nozo surface/tunnel/relay.
 
 Восстановление после аварии процесса: `Restart=on-failure` у Relay; watchdog/поверхность поднимают Funnel снова.
 
